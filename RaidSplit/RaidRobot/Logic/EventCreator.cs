@@ -1,8 +1,8 @@
 ﻿using Discord;
 using Discord.Commands;
 using Microsoft.Extensions.Configuration;
+using RaidRobot.Data;
 using RaidRobot.Data.Entities;
-using RaidRobot.Data.Interfaces;
 using RaidRobot.Infrastructure;
 using RaidRobot.Messaging;
 using System;
@@ -18,15 +18,21 @@ namespace RaidRobot.Logic
         private readonly IRaidSplitConfiguration config;
         private readonly ISplitDataStore splitDataStore;
         private readonly ITextCommunicator textCommunicator;
+        private readonly IRegistrantLoader registrantLoader;
+        private readonly IMessageBuilder messageBuilder;
 
         public EventCreator(
             IRaidSplitConfiguration config,
             ISplitDataStore splitDataStore,
-            ITextCommunicator textCommunicator)
+            ITextCommunicator textCommunicator, 
+            IRegistrantLoader registrantLoader,
+            IMessageBuilder messageBuilder)
         {
             this.config = config;
             this.splitDataStore = splitDataStore;
             this.textCommunicator = textCommunicator;
+            this.registrantLoader = registrantLoader;
+            this.messageBuilder = messageBuilder;
         }
 
         public async Task CreateEvent(SocketCommandContext context, IGuildUser user, string eventName, DateTime raidTime, string raidTypeName)
@@ -61,7 +67,7 @@ namespace RaidRobot.Logic
                 RaidType = raidType,
             };
 
-            var registrationMessage = BuildRegistrationMessage(raidEvent);
+            var registrationMessage = messageBuilder.BuildRegistrationMessage(raidEvent);
             var registrationMessageResult = await textCommunicator.SendMessage(context.Guild.Id, channel.Id, registrationMessage);
             raidEvent.Messages[MessageContexts.RegistrationMessage] = registrationMessageResult.ConvertToMessageDetail();
 
@@ -73,7 +79,8 @@ namespace RaidRobot.Logic
             await textCommunicator.React(context.Guild.Id, channel.Id, registrationMessageResult.Id, Reactions.NoShowCode);
             await textCommunicator.React(context.Guild.Id, channel.Id, registrationMessageResult.Id, Reactions.HelpCode);
 
-            var attendeeMessage = BuildAttendeeMessage(raidEvent);
+            var registrants = await registrantLoader.GetRegistrants(raidEvent);
+            var attendeeMessage = messageBuilder.BuildAttendeeMessage(raidEvent, registrants);
             var attendeeResult = await textCommunicator.SendMessage(context.Guild.Id, channel.Id, attendeeMessage);
             raidEvent.Messages[MessageContexts.AttendeeMessage] = attendeeResult.ConvertToMessageDetail();
 
@@ -85,26 +92,5 @@ namespace RaidRobot.Logic
             splitDataStore.SaveChanges();
         }
 
-        public string BuildRegistrationMessage(RaidEvent raidEvent)
-        {
-            StringBuilder sb = new StringBuilder();
-
-            sb.AppendLine($"**New {raidEvent.RaidType.Name} Raid {raidEvent.EventName} on {raidEvent.EventDT.ToShortDateString()} at {raidEvent.EventDT.ToString("hh:mm tt")} Sign Up Below**");
-            sb.AppendLine("```md");
-            sb.AppendLine("1. To register for the raid react to this message using the appropriate emoji for your character type.");
-            sb.AppendLine($"--- {string.Join(", ", raidEvent.RaidType.CharacterTypes.Select(x => $"{x.Name} {x.EmojiCode}"))}");
-            sb.AppendLine("2. If you are bringing multiple characters, please react to all the emojis that apply.");
-            sb.AppendLine("3. Use the clock emoji if you are going to be late. Uncheck it when you arrive to be put into a split.");
-            sb.AppendLine("4. Use the no entry emoji if you cannot make the raid.");
-            sb.AppendLine("5. Use question mark emoji once the splits are announced to easily find your split.");
-            sb.AppendLine("```");
-
-            return sb.ToString();
-        }
-
-        public string BuildAttendeeMessage(RaidEvent raidEvent)
-        {
-            return "TBD";
-        }
     }
 }

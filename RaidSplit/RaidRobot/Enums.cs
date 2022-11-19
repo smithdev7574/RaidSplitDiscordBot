@@ -21,4 +21,10 @@ namespace RaidRobot
         RegistrationMessage = 11,
         AttendeeMessage = 12
     }
+
+    public enum UnknownMessageTypes
+    {
+        Character = 1,
+        Class = 2,
+    }
 }

@@ -3,7 +3,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
 
-namespace RaidRobot.Data.Interfaces
+namespace RaidRobot.Data
 {
     public interface ISplitDataStore
     {

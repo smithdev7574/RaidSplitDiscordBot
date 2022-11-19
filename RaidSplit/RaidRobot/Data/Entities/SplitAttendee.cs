@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace RaidRobot.Data.Entities
 {
-    public class SplitMember
+    public class SplitAttendee
     {
         public string CharacterName { get; set; }
         public string ClassName { get; set; }
@@ -21,6 +21,10 @@ namespace RaidRobot.Data.Entities
         public decimal Weight { get; set; }
         public int RandomOrder { get; set; }
         public bool IsLate { get; set; }
+        public bool CanBeLeader { get; internal set; }
+        public bool CanBeMasterLooter { get; internal set; }
+        public bool CanBeInviter { get; internal set; }
+        public bool IsAnchor { get; internal set; }
 
         public override string ToString()
         {
@@ -30,9 +34,9 @@ namespace RaidRobot.Data.Entities
                 return CharacterName;
         }
 
-        public SplitMember Clone()
+        public SplitAttendee Clone()
         {
-            return new SplitMember()
+            return new SplitAttendee()
             {
                 CharacterName = this.CharacterName,
                 ClassName = this.ClassName,

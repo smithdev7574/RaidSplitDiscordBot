@@ -1,6 +1,5 @@
 ﻿using Newtonsoft.Json;
 using RaidRobot.Data.Entities;
-using RaidRobot.Data.Interfaces;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

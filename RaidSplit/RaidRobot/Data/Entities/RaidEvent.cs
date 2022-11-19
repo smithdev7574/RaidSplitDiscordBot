@@ -20,8 +20,8 @@ namespace RaidRobot.Data.Entities
         public List<ItemNeed> ItemNeeds { get; set; } = new List<ItemNeed>();
         public int SubSplitCount { get; set; }
 
-        public Dictionary<int, Split> PreparingSplits { get; set; } = new Dictionary<int, Split>();
-        public Dictionary<string, SplitMember> LateMembers { get; set; } = new Dictionary<string, SplitMember>();
+        public Dictionary<int, Split> Splits { get; set; } = new Dictionary<int, Split>();
+        public Dictionary<string, SplitAttendee> LateMembers { get; set; } = new Dictionary<string, SplitAttendee>();
 
         public Dictionary<MessageContexts, MessageDetail> Messages { get; set; } = new Dictionary<MessageContexts, MessageDetail>();
 

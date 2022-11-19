@@ -7,5 +7,6 @@ namespace RaidRobot.Infrastructure
     {
         Settings Settings { get; }
         List<RaidType> RaidTypes { get; }
+        List<GameClass> Classes { get; }
     }
 }

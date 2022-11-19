@@ -14,5 +14,7 @@ namespace RaidRobot.Data.Entities
         public ulong GuildID { get; set; }
         public string CharacterType { get; set; }
         public string UserName { get;  set; }
+        public UnknownMessageTypes MessageType { get; set; }
+        public string CharacterName { get; set; }
     }
 }

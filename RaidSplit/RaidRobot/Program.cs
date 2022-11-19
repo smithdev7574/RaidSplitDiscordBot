@@ -3,7 +3,6 @@ using Discord.Commands;
 using Discord.WebSocket;
 using Microsoft.Extensions.DependencyInjection;
 using RaidRobot.Data;
-using RaidRobot.Data.Interfaces;
 using RaidRobot.Infrastructure;
 using RaidRobot.Logic;
 using RaidRobot.Messaging;
@@ -41,19 +40,31 @@ namespace RaidRobot
             await client.LoginAsync(TokenType.Bot, config.Settings.Token);
             await client.StartAsync();
 
+            var reactionMonitor = services.GetRequiredService<IReactionMonitor>();
+            reactionMonitor.Initialize(); //Starts the watcher...
+
             await Task.Delay(-1);
         }
 
         private void configureServices()
         {
             var serviceCollection = new ServiceCollection()
-                .AddSingleton<IRaidSplitConfiguration>(config)
-                .AddSingleton(client)
-                .AddSingleton(commands)
-                .AddScoped<IPermissionChecker, PermissionChecker>()
-                .AddSingleton<ISplitDataStore, SplitDataStore>()
-                .AddScoped<ITextCommunicator, TextCommunicator>()
-                .AddScoped<IEventCreator, EventCreator>();
+                .AddSingleton<IRaidSplitConfiguration>(config) //Wrapper around appsettings.json to access the config data
+                .AddSingleton(client) //The Discord.Net client that is maintaining the connection and interaction to discord
+                .AddSingleton(commands) //A reference to the commands we wireup to accept command input from discord
+                .AddScoped<IEventCreator, EventCreator>() // Creates Events and Sets up the Initial Announcements
+                .AddScoped<IEventOrchestrator, EventOrchestrator>() //Handles Interactions for a given Raid Event
+                .AddScoped<IGuildMemberConverter, GuildMemberConverter>() //Helper to convert a Guild Member into an Attendee (probably could have been an extension method)
+                .AddScoped<IMessageBuilder, MessageBuilder>() //Lots of string manipulation to build output for the Raid Events and Splits
+                .AddScoped<IPermissionChecker, PermissionChecker>() //Checks Discord Permissions
+                .AddScoped<IRaidSplitter, RaidSplitter>() //Logic class to actually perform the Split Logic
+                .AddSingleton<IRandomizer, Randomizer>() //Wrapper around .Net Random so we can keep a singleton around for all random numbers
+                .AddSingleton<IReactionMonitor, ReactionMonitor>() //Watches and responds to reactions
+                .AddScoped<IRegistrantLoader, RegistrantLoader>() //Interacts with discord to see who has registered
+                .AddScoped<IRosterOrchestrator, RosterOrchestrator>() //Handles Interactions for the Roster Management
+                .AddSingleton<ISplitDataStore, SplitDataStore>() //Wrapper around a JsonFile with all our data so we can pretend its a database
+                .AddScoped<ISplitOrchestrator, SplitOrchestrator>() //Handles Interactions for a given Split
+                .AddScoped<ITextCommunicator, TextCommunicator>(); //Wrapper to send messages in discord
 
             services = serviceCollection.BuildServiceProvider();
         }
