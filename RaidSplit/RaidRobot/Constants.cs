@@ -10,5 +10,6 @@ namespace RaidRobot
     {
         public static int DEFAULT_EVENT_HOURS = 6;
         public static int DEFAULT_EXTENSION_HOURS = 12;
+        public static string DATA_FILE_NAME = "SplitData.json";
     }
 }

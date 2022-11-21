@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using RaidRobot.Data.Entities;
+using RaidRobot.Infrastructure;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -15,6 +16,7 @@ namespace RaidRobot.Data
         private object lockObj = new object();
         private SplitData splitData;
         string fileName;
+        private readonly IRaidSplitConfiguration config;
 
         public ConcurrentDictionary<string, GuildMember> Roster => splitData.Roster;
         public ConcurrentDictionary<Guid, RaidEvent> Events => splitData.Events;
@@ -22,19 +24,19 @@ namespace RaidRobot.Data
         public ConcurrentDictionary<string, PreSplit> PreSplits => splitData.PreSplits;
 
 
-        public SplitDataStore()
+        public SplitDataStore(IRaidSplitConfiguration config)
         {
             fileName = getFileName();
             splitData = loadFromDataStore();
+            this.config = config;
         }
 
         private string getFileName()
         {
-            string directory = $"{Directory.GetCurrentDirectory()}\\DataFiles";
-            if (!Directory.Exists(directory))
-                Directory.CreateDirectory(directory);
+            if(!Directory.Exists(config.Settings.DataFileDirectoryPath))
+                Directory.CreateDirectory(config.Settings.DataFileDirectoryPath);
 
-            string fileName = $"{directory}\\SplitData.json";
+            string fileName = Path.Combine(config.Settings.DataFileDirectoryPath, Constants.DATA_FILE_NAME);
             return fileName;
         }
 
