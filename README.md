@@ -1,7 +1,7 @@
 # Raid Split Discord Bot
 This bot was built rather quickly to manage the raid splits for an Everquest guild (Altered Minds) on the Aradune server. I recently refactored some of the code trying to add as many settings as possible and make the code a bit more readable.  This is the version after the first refactor. I could have kept going with the refactor, but it should be good enough to use at this point. You may see some unique behavior based on our Guild's processes, but most should be configurable now.
 
-It was built using .Net 6 in Visual Studio Community 2022 using .Net 6. The bot also leverages Discord.Net for all discord interaction. Check out their Repo [Here](https://github.com/discord-net/Discord.Net). 
+It was built using .Net 6 in Visual Studio Community 2022. The bot also leverages Discord.Net for all discord interaction. Check out their Repo [Here](https://github.com/discord-net/Discord.Net). 
 
 ## Setup
 Register your instance of the bot with discord and an authentication token should be provided the app settings below. (Some Day I will move this to a bit more secure location in the app).  Here is a good [guide](https://discordpy.readthedocs.io/en/stable/discord.html) on setting up your bot.
@@ -16,6 +16,7 @@ When creating an invite link make sure the following permissions are checked.
 ### appsettings.json
 The bot uses an appsettings.json file for customizations. Someday I may move these settings to be per discord guild, but for now its a single configuration. 
 * Settings - A section for generic variables the app needs to function
+    * The Two Path settings (DataFileDirectoryPath and TempFileDirectoryPath) are settings to tell the bot where to do I/O make sure the bot has access to these directories.
 * RaidTypes - Our guild has multiple raids, a main raids and an alt raids. This configuration lets you set the types of raids and character ranks you want to register for each raid event.
 * The emoji for a character type drives the reactions users will use to register.
 * Character weight helps the split logic when boxes are involved so one box doesn't equal one main
@@ -30,7 +31,9 @@ The bot uses an appsettings.json file for customizations. Someday I may move the
     "RegistrationChannel": "__Name of the channel peple will use to register__",
     "SpamChannel": "__Name of the channel where all the spam can go___",
     "AdminChannel": "__Name of the channel where you want to perform admin commands__",
-    "SplitChannel":  "__Name of the channel where splits are announced__"
+    "SplitChannel":  "__Name of the channel where splits are announced__",
+    "DataFileDirectoryPath": "__DirectoryTheBotHasAccessToStoreTheDataFile__",
+    "TempFileDirectoryPath": "__DirectoryTheBotHasAccessToStoreTheTempFiles__"
   },
   "RaidTypes": [
     {
