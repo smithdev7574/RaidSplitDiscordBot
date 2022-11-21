@@ -14,5 +14,7 @@ namespace RaidRobot.Infrastructure
         public string SpamChannel { get; set; }
         public string AdminChannel { get; set; }
         public string SplitChannel { get; set; }
+        public string DataFileDirectoryPath { get; set; }
+        public string TempFileDirectoryPath { get; set; }
     }
 }

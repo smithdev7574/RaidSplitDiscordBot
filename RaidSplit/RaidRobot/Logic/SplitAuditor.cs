@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace RaidRobot.Logic
 {
@@ -48,12 +49,10 @@ namespace RaidRobot.Logic
 
         private string getFileName()
         {
-            string directory = $"{Directory.GetCurrentDirectory()}\\TempFiles";
-            if (!Directory.Exists(directory))
-                Directory.CreateDirectory(directory);
+            if (!Directory.Exists(config.Settings.TempFileDirectoryPath))
+                Directory.CreateDirectory(config.Settings.TempFileDirectoryPath);
 
-            string fileName = $"{directory}\\{Guid.NewGuid()}.txt";
-
+            string fileName = Path.Combine(config.Settings.DataFileDirectoryPath, $"{Guid.NewGuid()}.txt");
             return fileName;
         }
     }
