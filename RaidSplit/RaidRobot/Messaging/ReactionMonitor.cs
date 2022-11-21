@@ -173,6 +173,7 @@ namespace RaidRobot.Messaging
                             charactersMessage = string.Join(", ", characters.Select(x => $"{x.CharacterName} - {x.CharacterType}"));
                         var errorMessage = $"Removing {mention} from {raidEvent.EventName} because there is something wrong with their {characterType.Name} character.{Environment.NewLine}" +
                             $"Characters mapped to UserID {userID}: {charactersMessage}";
+                        await textCommunicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SpamChannel, errorMessage);
                     }
                 }
                 await eventOrchestrator.UpdateAteendeeMessage(raidEvent);
