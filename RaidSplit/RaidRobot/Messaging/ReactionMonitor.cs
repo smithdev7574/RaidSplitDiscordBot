@@ -20,6 +20,7 @@ namespace RaidRobot.Messaging
         private readonly ISplitDataStore splitDataStore;
         private readonly IEventOrchestrator eventOrchestrator;
         private readonly IRosterOrchestrator rosterOrchestrator;
+        private readonly ITextCommunicator textCommunicator;
 
         private Emoji helpEmoji = new Emoji(Reactions.HelpCode);
         private Emoji lateEmoji = new Emoji(Reactions.LateCode);
@@ -31,13 +32,15 @@ namespace RaidRobot.Messaging
             IRaidSplitConfiguration config,
             ISplitDataStore splitDataStore,
             IEventOrchestrator eventOrchestrator,
-            IRosterOrchestrator rosterOrchestrator)
+            IRosterOrchestrator rosterOrchestrator,
+            ITextCommunicator textCommunicator)
         {
             this.client = client;
             this.config = config;
             this.splitDataStore = splitDataStore;
             this.eventOrchestrator = eventOrchestrator;
             this.rosterOrchestrator = rosterOrchestrator;
+            this.textCommunicator = textCommunicator;
         }
 
         public void Initialize()
@@ -141,28 +144,44 @@ namespace RaidRobot.Messaging
 
         private async Task registrantAdded(RaidEvent raidEvent, CharacterType characterType, ulong guildID, ulong userID, ulong channelID, ulong messageID, SocketReaction reaction)
         {
-            
-            var guild = client.GetGuild(guildID);
-            var user = guild.GetUser(userID);
-
-            if (user != null && user.IsBot)
-                return;
-
-            var guildMember = await rosterOrchestrator.ValidateUser(raidEvent, reaction.UserId, characterType);
-            if (guildMember != null)
+            try
             {
-                await eventOrchestrator.AddRegistrant(raidEvent, characterType, guildMember, userID);
-            }
-            else
-            {
-                //Can't figure out who they are, get rid of em...
-                var channel = guild.GetTextChannel(channelID);
-                var message = await channel.GetMessageAsync(messageID);
+                var guild = client.GetGuild(guildID);
+                var user = guild.GetUser(userID);
 
-                if(message != null)
-                    await message.RemoveReactionAsync(reaction.Emote, userID);
+                if (user != null && user.IsBot)
+                    return;
+
+                var guildMember = await rosterOrchestrator.ValidateUser(raidEvent, reaction.UserId, characterType);
+                if (guildMember != null)
+                {
+                    await eventOrchestrator.AddRegistrant(raidEvent, characterType, guildMember, userID);
+                }
+                else
+                {
+                    //Can't figure out who they are, get rid of em...
+                    var channel = guild.GetTextChannel(channelID);
+                    var message = await channel.GetMessageAsync(messageID);
+
+                    if (message != null)
+                    {
+                        await message.RemoveReactionAsync(reaction.Emote, userID);
+                        var mention = MentionUtils.MentionUser(userID);
+                        var characters = splitDataStore.Roster.Values.Where(x => x.UserId == userID);
+                        string charactersMessage = "none";
+                        if (characters.Any())
+                            charactersMessage = string.Join(", ", characters.Select(x => $"{x.CharacterName} - {x.CharacterType}"));
+                        var errorMessage = $"Removing {mention} from {raidEvent.EventName} because there is something wrong with their {characterType.Name} character.{Environment.NewLine}" +
+                            $"Characters mapped to UserID {userID}: {charactersMessage}";
+                    }
+                }
+                await eventOrchestrator.UpdateAteendeeMessage(raidEvent);
             }
-            await eventOrchestrator.UpdateAteendeeMessage(raidEvent);
+            catch(Exception ex)
+            {
+                Console.WriteLine($"Error registrantAdded: {ex.Message}{Environment.NewLine}{ex.StackTrace}");
+                await textCommunicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SpamChannel, $"Error adding registrant: {ex.Message}");
+            }
         }
     }
 }
