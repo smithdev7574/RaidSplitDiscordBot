@@ -23,12 +23,11 @@ namespace RaidRobot.Data
         public ConcurrentDictionary<ulong, UnknownMessage> UnknownMessages => splitData.UnknownMessages;
         public ConcurrentDictionary<string, PreSplit> PreSplits => splitData.PreSplits;
 
-
         public SplitDataStore(IRaidSplitConfiguration config)
         {
+            this.config = config;
             fileName = getFileName();
             splitData = loadFromDataStore();
-            this.config = config;
         }
 
         private string getFileName()

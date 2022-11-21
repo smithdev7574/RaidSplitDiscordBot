@@ -290,8 +290,15 @@ namespace RaidRobot.Logic
                 var responsibilitiesContent = messageBuilder.BuildResponsiblityAnnouncement(split);
                 var responsibilitiesMessage = await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.AdminChannel, responsibilitiesContent);
                 split.Messages[MessageContexts.ResponsibilityMessage] = responsibilitiesMessage.ConvertToMessageDetail();
-                
-                await auditor.GenerateAuditFile(raidEvent, split);
+
+                try
+                {
+                    await auditor.GenerateAuditFile(raidEvent, split);
+                }
+                catch(Exception ex)
+                {
+                    Console.WriteLine($"Error creating audit file, {ex.Message}");
+                }
 
             }
 
