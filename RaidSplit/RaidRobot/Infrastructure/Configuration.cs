@@ -35,7 +35,7 @@ namespace RaidRobot.Infrastructure
             if (!classes.Any())
                 Console.WriteLine("***WARNING*** You have to classes in your appsettings.json file. Look at the readme for help.");
 
-            Console.WriteLine($"Configuration Loaded.  Token: {settings.Token}, Index: {settings.Index}, BackupPath: {settings.BackupPath}");
+            Console.WriteLine($"Configuration Loaded.  Index: {settings.Index}, BackupPath: {settings.BackupPath}");
         }
     }
 }
