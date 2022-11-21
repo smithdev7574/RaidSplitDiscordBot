@@ -19,6 +19,7 @@ namespace RaidRobot.Data
         public ConcurrentDictionary<string, GuildMember> Roster => splitData.Roster;
         public ConcurrentDictionary<Guid, RaidEvent> Events => splitData.Events;
         public ConcurrentDictionary<ulong, UnknownMessage> UnknownMessages => splitData.UnknownMessages;
+        public ConcurrentDictionary<string, PreSplit> PreSplits => splitData.PreSplits;
 
 
         public SplitDataStore()
@@ -47,6 +48,44 @@ namespace RaidRobot.Data
             }
 
             return data;
+        }
+
+        public string UpdateRoster(List<GuildMember> roster)
+        {
+            int addedCount = 0;
+            int updatedCount = 0;
+
+            StringBuilder added = new StringBuilder();
+            StringBuilder updated = new StringBuilder();
+
+            foreach (var member in roster)
+            {
+                lock (lockObj)
+                {
+                    splitData.Roster.TryGetValue(member.CharacterName, out var foundMember);
+                    if (foundMember == null)
+                    {
+                        splitData.Roster[member.CharacterName] = member;
+                        addedCount++;
+                        added.Append($", {member.CharacterName}");
+                    }
+                    else
+                    {
+                        if (foundMember.Rank != member.Rank || foundMember.Level != member.Level || foundMember.Comment != member.Comment)
+                        {
+                            foundMember.Rank = member.Rank;
+                            foundMember.Level = member.Level;
+                            foundMember.Comment = member.Comment;
+                            updatedCount++;
+                            updated.Append($", {member.CharacterName}");
+                        }
+                    }
+                }
+            }
+
+            SaveChanges();
+
+            return $"**Added ({addedCount})**{Environment.NewLine}**Updated ({updatedCount})**{Environment.NewLine}";
         }
 
         public void SaveChanges()

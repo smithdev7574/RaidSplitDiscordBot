@@ -21,7 +21,7 @@ namespace RaidRobot.Logic
         public string BuildSplitAnnouncement(RaidEvent raidEvent, Split split)
         {
             StringBuilder sb = new StringBuilder();
-            sb.AppendLine($"**{raidEvent.RaidType} Raid {raidEvent.EventName} on {raidEvent.EventDT.ToShortDateString()} at {raidEvent.EventDT.ToString("hh:mm tt")}**");
+            sb.AppendLine($"**{raidEvent.RaidType.Name} Raid {raidEvent.EventName} on {raidEvent.EventDT.ToShortDateString()} at {raidEvent.EventDT.ToString("hh:mm tt")}**");
             sb.AppendLine("```md");
             sb.AppendLine($"Split {split.SplitNumber} - Leader {split.Leader.CharacterName} - ({split.Attendees.Count})");
             sb.AppendLine("-------------------------------");
@@ -160,6 +160,23 @@ namespace RaidRobot.Logic
             }
             sb.AppendLine("```");
 
+            return sb.ToString();
+        }
+
+        public string BuildResponsiblityAnnouncement(Split split)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("```md");
+            sb.AppendLine($"Split {split.SplitNumber} - Leader: {split.Leader.CharacterName} - Looter: {split.MasterLooter.CharacterName} - Inviter: {split.Inviter.CharacterName}");
+            sb.AppendLine($"------------------------");
+            sb.AppendLine("* Reply Leader followed by a character name to change it.");
+            sb.AppendLine("* Reply Looter followed by a character name to change it.");
+            sb.AppendLine("* Reply Inviter followed by a character name to change it.");
+            sb.AppendLine("* Reply Move followed by a character name to move them into this split.");
+            sb.AppendLine("* Reply Swap followed by two character names to swap their splits.");
+            sb.AppendLine("* Reply Redo followed by a split count to rebuild the splits using a differnt random seed.");
+            sb.AppendLine("* Reply IgnoreBuddies to redo the splits without buddies.");
+            sb.AppendLine("```");
             return sb.ToString();
         }
 

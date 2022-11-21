@@ -11,5 +11,7 @@ namespace RaidRobot.Data.Entities
         public string Name { get; set; }
         public string EmojiCode { get; set; }
         public string ShortName { get; set; }
+        public bool IsMelee { get; set; }
+        public bool IsCaster { get; set; }
     }
 }

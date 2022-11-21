@@ -5,7 +5,9 @@ using Microsoft.Extensions.DependencyInjection;
 using RaidRobot.Data;
 using RaidRobot.Infrastructure;
 using RaidRobot.Logic;
+using RaidRobot.Logic.Interfaces;
 using RaidRobot.Messaging;
+using RaidRobot.Messaging.Interfaces;
 using RaidRobot.Users;
 using System;
 using System.Security.Authentication.ExtendedProtection;
@@ -43,6 +45,9 @@ namespace RaidRobot
             var reactionMonitor = services.GetRequiredService<IReactionMonitor>();
             reactionMonitor.Initialize(); //Starts the watcher...
 
+            var messageMonitor = services.GetRequiredService<IMessageMonitor>();
+            messageMonitor.Initialize(); //Starts the watcher...
+
             await Task.Delay(-1);
         }
 
@@ -56,15 +61,21 @@ namespace RaidRobot
                 .AddScoped<IEventOrchestrator, EventOrchestrator>() //Handles Interactions for a given Raid Event
                 .AddScoped<IGuildMemberConverter, GuildMemberConverter>() //Helper to convert a Guild Member into an Attendee (probably could have been an extension method)
                 .AddScoped<IMessageBuilder, MessageBuilder>() //Lots of string manipulation to build output for the Raid Events and Splits
+                .AddSingleton<IMessageMonitor, MessageMonitor>() //Watches Incoming Messages for the raid split and responds NOTE: Not Commands
                 .AddScoped<IPermissionChecker, PermissionChecker>() //Checks Discord Permissions
+                .AddScoped<IPreSplitOrchestrator, PreSplitOrchestrator>() //Commands to manipulate the PreSplit Data
                 .AddScoped<IRaidSplitter, RaidSplitter>() //Logic class to actually perform the Split Logic
                 .AddSingleton<IRandomizer, Randomizer>() //Wrapper around .Net Random so we can keep a singleton around for all random numbers
                 .AddSingleton<IReactionMonitor, ReactionMonitor>() //Watches and responds to reactions
                 .AddScoped<IRegistrantLoader, RegistrantLoader>() //Interacts with discord to see who has registered
                 .AddScoped<IRosterOrchestrator, RosterOrchestrator>() //Handles Interactions for the Roster Management
+                .AddScoped<IRosterParser, RosterParser>() //Parses an EQ Guid Dump to create all the characters and classes
+                .AddScoped<ISplitCommandInterpreter, SplitCommandInterpreter>() //Provides parsing to understand split commands and execute them
+                .AddScoped<ISplitAuditor, SplitAuditor>() //Helps output a Split Audit so we can see the logic
                 .AddSingleton<ISplitDataStore, SplitDataStore>() //Wrapper around a JsonFile with all our data so we can pretend its a database
                 .AddScoped<ISplitOrchestrator, SplitOrchestrator>() //Handles Interactions for a given Split
-                .AddScoped<ITextCommunicator, TextCommunicator>(); //Wrapper to send messages in discord
+                .AddScoped<ITextCommunicator, TextCommunicator>() //Wrapper to send messages in discord
+                .AddSingleton<IUploadMonitor, UploadMonitor>(); //Monitors Discord for a file to be posted
 
             services = serviceCollection.BuildServiceProvider();
         }
@@ -123,5 +134,6 @@ namespace RaidRobot
             Console.WriteLine($"{DateTime.Now} - Log Message: {arg}");
             return Task.CompletedTask;
         }
+
     }
 }

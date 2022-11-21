@@ -13,5 +13,6 @@ namespace RaidRobot.Data
         public ConcurrentDictionary<string, GuildMember> Roster { get; set; } = new ConcurrentDictionary<string, GuildMember>();
         public ConcurrentDictionary<Guid, RaidEvent> Events { get; set; } = new ConcurrentDictionary<Guid, RaidEvent>();
         public ConcurrentDictionary<ulong, UnknownMessage> UnknownMessages { get; set; } = new ConcurrentDictionary<ulong, UnknownMessage>();
+        public ConcurrentDictionary<string, PreSplit> PreSplits { get; set; } = new ConcurrentDictionary<string, PreSplit>();
     }
 }

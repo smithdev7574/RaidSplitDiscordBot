@@ -6,23 +6,34 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using RaidRobot.Models;
+using Discord.WebSocket;
+using RaidRobot.Infrastructure;
 
 namespace RaidRobot.Logic
 {
     public class RaidSplitter : IRaidSplitter
     {
+        private readonly IRaidSplitConfiguration config;
         private readonly ISplitDataStore splitDataStore;
         private readonly IGuildMemberConverter converter;
         private readonly ISplitOrchestrator splitOrchestrator;
+        private readonly IRegistrantLoader registrantLoader;
+        private readonly IRandomizer randomizer;
 
         public RaidSplitter(
+            IRaidSplitConfiguration config,
             ISplitDataStore splitDataStore,
             IGuildMemberConverter converter,
-            ISplitOrchestrator splitOrchestrator)
+            ISplitOrchestrator splitOrchestrator,
+            IRegistrantLoader registrantLoader,
+            IRandomizer randomizer)
         {
+            this.config = config;
             this.splitDataStore = splitDataStore;
             this.converter = converter;
             this.splitOrchestrator = splitOrchestrator;
+            this.registrantLoader = registrantLoader;
+            this.randomizer = randomizer;
         }
 
         public AttendeeResponse RemoveFromSplit(Dictionary<int, Split> splits, ulong userId, CharacterType characterType)
@@ -77,7 +88,7 @@ namespace RaidRobot.Logic
             };
         }
 
-        public  AttendeeResponse AddToSplit(RaidEvent raidEvent, Dictionary<int, Split> splits, ulong userId, CharacterType characterType, bool ignoreBuddies = false)
+        public AttendeeResponse AddToSplit(RaidEvent raidEvent, Dictionary<int, Split> splits, ulong userId, CharacterType characterType, bool ignoreBuddies = false)
         {
             var member = splitDataStore.Roster.Values
                     .FirstOrDefault(x => x.UserId == userId
@@ -105,7 +116,7 @@ namespace RaidRobot.Logic
             return AddToSplit(raidEvent, splits, attendee, ignoreBuddies);
         }
 
-        public  AttendeeResponse AddToSplit(RaidEvent raidEvent, Dictionary<int, Split> splits, SplitAttendee attendee, bool ignoreBuddies = false)
+        public AttendeeResponse AddToSplit(RaidEvent raidEvent, Dictionary<int, Split> splits, SplitAttendee attendee, bool ignoreBuddies = false)
         {
             var alreadyInASplit = raidEvent.Splits.Values.FirstOrDefault(x => x.Attendees.Values.Any(y => string.Equals(y.CharacterName, attendee.CharacterName, StringComparison.OrdinalIgnoreCase)));
             if (alreadyInASplit != null)
@@ -140,6 +151,199 @@ namespace RaidRobot.Logic
                 Split = bestSplit,
                 Attendee = attendee
             };
+        }
+
+        public async Task<Dictionary<int, Split>> Split(RaidEvent raidEvent, int numberOfSplits, Dictionary<string, SplitAttendee> members = null, bool ignoreBuddies = false)
+        {
+            var splits = new Dictionary<int, Split>();
+            if (members == null)
+            {
+                var registrants = await registrantLoader.GetRegistrants(raidEvent);
+                members = registrants.Members;
+            }
+
+            performSplit(raidEvent, splits, members, numberOfSplits, ignoreBuddies);
+            return splits;
+        }
+
+        private void performSplit(RaidEvent raidEvent, Dictionary<int, Split> splits, Dictionary<string, SplitAttendee> registrants, int numberOfSplits, bool ignoreBuddies)
+        {
+            randomizeMembers(registrants);
+            var members = registrants.Values.Where(x => !x.IsLate).OrderBy(x => x.RandomOrder);
+
+            initializeSplits(splits, registrants.Values, numberOfSplits);
+            setBoxers(raidEvent, splits, members, raidEvent.ItemNeeds, ignoreBuddies);
+            setAnchors(raidEvent, splits, members, raidEvent.ItemNeeds, ignoreBuddies);
+            setTheRest(raidEvent, splits, members, raidEvent.ItemNeeds, ignoreBuddies);
+
+            raidEvent.LateMembers = registrants.Values.Where(x => x.IsLate).ToDictionary(x => x.CharacterName, x => x);
+        }
+
+        private void randomizeMembers(Dictionary<string, SplitAttendee> members)
+        {
+            foreach (var member in members.Values)
+            {
+                member.RandomOrder = randomizer.GetRandomNumber(0, 10000);
+            }
+        }
+        private List<PreSplit> randomizePreSplits()
+        {
+            foreach (var preSplit in splitDataStore.PreSplits)
+            {
+                preSplit.Value.RandomNumber = randomizer.GetRandomNumber(0, 10000);
+            }
+            var randomOrderedPreSplits = splitDataStore.PreSplits.Values.OrderBy(x => x.RandomNumber);
+            return randomOrderedPreSplits.ToList();
+        }
+
+
+        private void initializeSplits(Dictionary<int, Split> splits, IEnumerable<SplitAttendee> splitMembers, int numberOfSplits)
+        {
+            var preSplits = randomizePreSplits();
+            for (int x = 0; x < numberOfSplits; x++)
+            {
+                var split = new Split()
+                {
+                    SplitNumber = x + 1,
+                };
+                splits[split.SplitNumber] = split;
+
+                PreSplit preSplit = null;
+                if (x < preSplits.Count)
+                    preSplit = preSplits[x];
+
+                SplitAttendee leader = null;
+                SplitAttendee looter = null;
+                SplitAttendee inviter = null;
+
+                if (preSplit != null)
+                {
+                    foreach (var character in preSplit.Characters)
+                    {
+                        var member = splitMembers.FirstOrDefault(x => string.Equals(x.CharacterName, character, StringComparison.OrdinalIgnoreCase)
+                            && x.SplitNumber == null);
+                        if (member == null)
+                            continue;
+
+                        addSplitAttendee(splits, split, member, splitMembers, $"Pre Selected {member.CharacterName} from Pre Split: {preSplit.Name}.");
+                    }
+
+                    leader = split.Attendees.Values.FirstOrDefault(x =>
+                        string.Equals(x.CharacterName, preSplit.LeaderName, StringComparison.OrdinalIgnoreCase));
+                    looter = split.Attendees.Values.FirstOrDefault(x =>
+                        string.Equals(x.CharacterName, preSplit.LooterName, StringComparison.OrdinalIgnoreCase));
+                    inviter = split.Attendees.Values.FirstOrDefault(x =>
+                        string.Equals(x.CharacterName, preSplit.InviterName, StringComparison.OrdinalIgnoreCase));
+
+                    if (leader == null)
+                        leader = split.Attendees.Values.FirstOrDefault();
+
+                    split.Leader = leader;
+                    split.MasterLooter = looter ?? leader;
+                    split.Inviter = inviter ?? leader;
+                }
+
+                if (leader == null)
+                {
+                    splitMembers.FirstOrDefault(x => x.SplitNumber == null && x.CanBeLeader);
+
+                    if (leader == null)
+                        leader = splitMembers.FirstOrDefault(x => x.SplitNumber == null && x.Rank == "Officer");
+
+                    if (leader == null)
+                        leader = splitMembers.FirstOrDefault(x => x.SplitNumber == null);
+
+                    split.Leader = leader;
+                    split.MasterLooter = leader;
+                    split.Inviter = leader;
+
+                    addSplitAttendee(splits, split, leader, splitMembers, $"{generateAuditStart(split, leader)} because they are the leader.");
+                }
+            }
+        }
+
+        private void setBoxers(RaidEvent raidEvent, Dictionary<int, Split> splits, IEnumerable<SplitAttendee> members, List<ItemNeed> itemNeeds, bool ignoreBuddies)
+        {
+            setMeleeBoxOwners(raidEvent, splits, members, itemNeeds, ignoreBuddies);
+            setCasterBoxOwners(raidEvent, splits, members, itemNeeds, ignoreBuddies);
+            setBoxOwners(raidEvent, splits, members, itemNeeds, ignoreBuddies);
+        }
+
+        private void setMeleeBoxOwners(RaidEvent raidEvent, Dictionary<int, Split> splits, IEnumerable<SplitAttendee> members, List<ItemNeed> itemNeeds, bool ignoreBuddies)
+        {
+            var boxes = members.Where(x => x.IsBox && x.SplitNumber == null);
+            foreach (var box in boxes)
+            {
+                var owner = members.FirstOrDefault(x => x.UserID == box.UserID && !string.Equals(x.CharacterName, box.CharacterName, StringComparison.OrdinalIgnoreCase));
+                if (owner == null)
+                    continue;
+
+                if (!config.Classes.Any(x => x.IsMelee && string.Equals(x.Name, owner.ClassName, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var splitResult = findBestSplitForAttendee(raidEvent, splits, owner, ignoreBuddies);
+                var reason = $"{owner.CharacterName} is a melee and boxing - {splitResult.Audit}";
+                addSplitAttendee(splits, splitResult.Split, owner, members, reason);
+            }
+        }
+
+        private void setCasterBoxOwners(RaidEvent raidEvent, Dictionary<int, Split> splits, IEnumerable<SplitAttendee> members, List<ItemNeed> itemNeeds, bool ignoreBuddies)
+        {
+            var boxes = members.Where(x => x.IsBox && x.SplitNumber == null);
+            foreach (var box in boxes)
+            {
+                var owner = members.FirstOrDefault(x => x.UserID == box.UserID && !string.Equals(x.CharacterName, box.CharacterName, StringComparison.OrdinalIgnoreCase));
+                if (owner == null)
+                    continue;
+
+                if (!config.Classes.Any(x => x.IsCaster && string.Equals(x.Name, owner.ClassName, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var splitResult = findBestSplitForAttendee(raidEvent, splits, owner, ignoreBuddies);
+                var reason = $"{owner.CharacterName} is a caster and boxing - {splitResult.Audit}";
+                addSplitAttendee(splits, splitResult.Split, owner, members, reason);
+            }
+        }
+
+        private void setBoxOwners(RaidEvent raidEvent, Dictionary<int, Split> splits, IEnumerable<SplitAttendee> members, List<ItemNeed> itemNeeds, bool ignoreBuddies)
+        {
+            var boxes = members.Where(x => x.IsBox && x.SplitNumber == null);
+            foreach (var box in boxes)
+            {
+                var owner = members.FirstOrDefault(x => x.UserID == box.UserID && !string.Equals(x.CharacterName, box.CharacterName, StringComparison.OrdinalIgnoreCase));
+                if (owner == null)
+                    continue;
+
+                var splitResult = findBestSplitForAttendee(raidEvent, splits, owner, ignoreBuddies);
+                var reason = $"{owner.CharacterName} is boxing - {splitResult.Audit}";
+                addSplitAttendee(splits, splitResult.Split, owner, members, reason);
+            }
+        }
+
+        private void setAnchors(RaidEvent raidEvent, Dictionary<int, Split> splits, IEnumerable<SplitAttendee> members, List<ItemNeed> itemNeeds, bool ignoreBuddies)
+        {
+            var availableAnchors = members.Where(x => x.IsAnchor && x.SplitNumber == null);
+            var groupedAnchors = availableAnchors.GroupBy(x => x.ClassName);
+
+            foreach (var anchorGroup in groupedAnchors)
+            {
+                foreach (var anchor in anchorGroup)
+                {
+                    var splitResult = findBestSplitForAttendee(raidEvent, splits, anchor, ignoreBuddies);
+                    addSplitAttendee(splits, splitResult.Split, anchor, members, splitResult.Audit);
+                }
+            }
+        }
+
+        private void setTheRest(RaidEvent raidEvent, Dictionary<int, Split> splits, IEnumerable<SplitAttendee> members, List<ItemNeed> itemNeeds, bool ignoreBuddies)
+        {
+            var availableMembers = members.Where(x => x.SplitNumber == null);
+
+            foreach (var member in availableMembers)
+            {
+                var splitResult = findBestSplitForAttendee(raidEvent, splits, member, ignoreBuddies);
+                addSplitAttendee(splits, splitResult.Split, member, members, splitResult.Audit);
+            }
         }
 
         private (Split Split, string Audit) findBestSplitForAttendee(RaidEvent raidEvent, Dictionary<int, Split> splits, SplitAttendee attendee, bool ignoreBuddies)
@@ -243,26 +447,48 @@ namespace RaidRobot.Logic
             return members.Intersect(characters).ToList();
         }
 
-        private void addSplitAttendee(Dictionary<int, Split> splits, Split split, SplitAttendee attendee, IEnumerable<SplitAttendee> attendees, string reason)
+        private void addSplitAttendee(Dictionary<int, Split> splits, Split split, SplitAttendee attendee, IEnumerable<SplitAttendee> attendees, string reason, bool skipBoxes = false)
         {
             if (attendee.SplitNumber != null)
                 return;
 
-            var splitAudit = string.Join(Environment.NewLine, splits.Select(x => x.Value.ToString()));
+            var splitAudit = string.Join(Environment.NewLine, splits.Select(x => getSplitDescription(x.Value)));
             split.Attendees[attendee.CharacterName] = attendee;
             var count = split.Attendees.Count.ToString().PadLeft(4, '0');
             attendee.SplitNumber = split.SplitNumber;
             attendee.SplitReason = $"{count}{Environment.NewLine}{splitAudit}{Environment.NewLine}{reason}";
 
-            if (!attendee.IsBox)
+            if (skipBoxes)
+                return;
+
+            var boxes = attendees.Where(x => x.UserID == attendee.UserID && !string.Equals(x.CharacterName, attendee.CharacterName)).ToList();
+            foreach (var box in boxes)
             {
-                var box = attendees.FirstOrDefault(x => x.UserID == attendee.UserID && x.IsBox);
-                if (box != null)
-                {
-                    addSplitAttendee(splits, split, box, attendees, $"{generateAuditStart(split, box)} they are **{attendee.CharacterName}'s** box.");
-                    attendee.IsBoxing = true;
-                }
+                addSplitAttendee(splits, split, box, attendees, $"{generateAuditStart(split, box)} they are **{attendee.CharacterName}'s** box.", true);
+                attendee.IsBoxing = true;
             }
         }
+
+        private string getSplitDescription(Split split)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append($"Split {split.SplitNumber} - ({split.Attendees.Count}) ");
+
+            foreach (var gameClass in config.Classes)
+            {
+                sb.Append($"{gameClass.Name} - ({calculateClassWeight(split, gameClass.Name)}) ");
+            }
+
+            return sb.ToString();
+        }
+
+        private decimal calculateClassWeight(Split split, string className)
+        {
+            var weight = split.Attendees.Values.Where(x => string.Equals(x.ClassName, className, StringComparison.OrdinalIgnoreCase)).Sum(x => x.Weight);
+            return weight;
+        }
+
+
     }
+
 }

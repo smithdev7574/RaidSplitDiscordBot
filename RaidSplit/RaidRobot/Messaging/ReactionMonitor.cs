@@ -53,6 +53,7 @@ namespace RaidRobot.Messaging
                 var activeRaid = splitDataStore.Events.Values.FirstOrDefault(x => x.ExpirationDT >= DateTime.Now &&
                     x.Messages.Any(y => y.Key == MessageContexts.RegistrationMessage && y.Value.MessageID == message.Id));
 
+
                 if (activeRaid == null)
                     return;
 
@@ -140,6 +141,7 @@ namespace RaidRobot.Messaging
 
         private async Task registrantAdded(RaidEvent raidEvent, CharacterType characterType, ulong guildID, ulong userID, ulong channelID, ulong messageID, SocketReaction reaction)
         {
+            
             var guild = client.GetGuild(guildID);
             var user = guild.GetUser(userID);
 

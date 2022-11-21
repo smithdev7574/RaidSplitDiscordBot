@@ -27,4 +27,12 @@ namespace RaidRobot
         Character = 1,
         Class = 2,
     }
+
+    public enum RaidResponsibilities
+    {
+        Leader = 1,
+        Looter = 2,
+        Inviter = 3,
+    }
+
 }

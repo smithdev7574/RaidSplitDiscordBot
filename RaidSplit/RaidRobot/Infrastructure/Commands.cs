@@ -1,5 +1,7 @@
-﻿using Discord.Commands;
+﻿using Discord;
+using Discord.Commands;
 using RaidRobot.Logic;
+using RaidRobot.Messaging.Interfaces;
 using RaidRobot.Users;
 using System;
 using System.Collections.Generic;
@@ -14,15 +16,27 @@ namespace RaidRobot.Infrastructure
         private readonly IRaidSplitConfiguration config;
         private readonly IPermissionChecker permissionChecker;
         private readonly IEventCreator eventCreator;
+        private readonly IUploadMonitor uploadMonitor;
+        private readonly IEventOrchestrator eventOrchestrator;
+        private readonly IRosterOrchestrator rosterOrchestrator;
+        private readonly IPreSplitOrchestrator preSplitOrchestrator;
 
         public Commands(
             IRaidSplitConfiguration config,
             IPermissionChecker permissionChecker, 
-            IEventCreator eventCreator)
+            IEventCreator eventCreator,
+            IUploadMonitor uploadMonitor,
+            IEventOrchestrator eventOrchestrator,
+            IRosterOrchestrator rosterOrchestrator,
+            IPreSplitOrchestrator preSplitOrchestrator)
         {
             this.config = config;
             this.permissionChecker = permissionChecker;
             this.eventCreator = eventCreator;
+            this.uploadMonitor = uploadMonitor;
+            this.eventOrchestrator = eventOrchestrator;
+            this.rosterOrchestrator = rosterOrchestrator;
+            this.preSplitOrchestrator = preSplitOrchestrator;
         }
 
         [Command("Help", RunMode = RunMode.Async)]
@@ -31,11 +45,8 @@ namespace RaidRobot.Infrastructure
             var sb = new StringBuilder();
 
             sb.AppendLine("__**User Commands**__");
-            sb.AppendLine($"**{config.Settings.MessagePrefix} ClassIS** followed by your character's name (in game) then your character's class. Use this command when the Bot can't figure out a character's class.");
-            sb.AppendLine($"**{config.Settings.MessagePrefix} MyAltMainIs** followed by your character's name (in game). Use this command when the Bot can't figure out your *Alt Main* character.");
-            sb.AppendLine($"**{config.Settings.MessagePrefix} MyAltPrimaryIs** followed by your character's name (in game). Use this command when the Bot can't figure out your *Alt Primary* character.");
-            sb.AppendLine($"**{config.Settings.MessagePrefix} MyMainIs** followed by your character's name (in game). Use this command when the Bot can't figure out your *Main* character.");
-            sb.AppendLine($"**{config.Settings.MessagePrefix} MyPrimaryAltIs** followed by your character's name (in game). Use this command when the Bot can't figure out your *Primary Alt* character.");
+            sb.AppendLine($"**{config.Settings.MessagePrefix} ClassIs** followed by your character's name (in game) then your character's class. Use this command when the Bot can't figure out a character's class.");
+            sb.AppendLine($"**{config.Settings.MessagePrefix} MyCharacterIs** followed by your character's name (in game) and a valid CharacterType. Use this command when the Bot can't figure out your character.");
             sb.AppendLine(string.Empty);
 
             sb.AppendLine("__**Admin Commands**__");
@@ -125,7 +136,7 @@ namespace RaidRobot.Infrastructure
             sb.AppendLine($"**{config.Settings.MessagePrefix} RemoveInviters**  followed by the character names (spaces between) to remove their ability to be a raid inviter.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} RemoveLeaders**  followed by the character names (spaces between) to remove their ability to be a raid leader.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} RemoveLooters**  followed by the character names (spaces between) to remove their ability to be a master looter.");
-            sb.AppendLine($"**{config.Settings.MessagePrefix} ManualMap**  followed by the character name, the character type then the discord user name to manually map a user to a character.");
+            sb.AppendLine($"**{config.Settings.MessagePrefix} MapCharacter**  followed by the character name, the character type then the discord user name to manually map a user to a character.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} AddAnchors** followed by the character names (spaces between) to set their anchor status.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} SetBuddies** followed by the character names (spaces between) to add as a buddy group.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} AddInviters** followed by the character names (spaces between) to grant them ability to be a raid inviter.");
@@ -138,6 +149,38 @@ namespace RaidRobot.Infrastructure
 
             await ReplyAsync(sb.ToString());
         }
+
+        private async Task<IGuildUser> findUser(string username)
+        {
+
+            var user = Context.Guild.Users.FirstOrDefault(x => x.Nickname?.ToLower() == username.ToLower());
+            if (user == null)
+            {
+                user = Context.Guild.Users.FirstOrDefault(x => x.Username.ToLower() == username.ToLower());
+            }
+
+            if (user == null)
+            {
+                var potentialusers = Context.Guild.Users.Where(x => x.Nickname != null && x.Nickname.ToLower().StartsWith(username.ToLower()));
+                if (potentialusers.Count() == 1)
+                    user = potentialusers.First();
+            }
+
+            if (user == null)
+            {
+                var potentialusers = Context.Guild.Users.Where(x => x.Username.ToLower().StartsWith(username.ToLower()));
+                if (potentialusers.Count() == 1)
+                    user = potentialusers.First();
+            }
+
+            if (user == null)
+            {
+                await ReplyAsync($"Could not locate user {username}");
+            }
+
+            return user;
+        }
+
 
     }
 }

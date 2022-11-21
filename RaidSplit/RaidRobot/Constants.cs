@@ -9,5 +9,6 @@ namespace RaidRobot
     public class Constants
     {
         public static int DEFAULT_EVENT_HOURS = 6;
+        public static int DEFAULT_EXTENSION_HOURS = 12;
     }
 }

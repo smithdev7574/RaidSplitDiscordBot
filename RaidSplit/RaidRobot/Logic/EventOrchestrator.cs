@@ -1,8 +1,10 @@
 ﻿using Discord;
+using Discord.Commands;
 using Discord.WebSocket;
 using RaidRobot.Data;
 using RaidRobot.Data.Entities;
 using RaidRobot.Infrastructure;
+using RaidRobot.Logic.Interfaces;
 using RaidRobot.Messaging;
 using System;
 using System.Collections.Generic;
@@ -22,7 +24,9 @@ namespace RaidRobot.Logic
         private readonly IRegistrantLoader registrantLoader;
         private readonly IRaidSplitConfiguration config;
         private readonly ISplitDataStore splitDataStore;
+        private readonly ISplitAuditor auditor;
         private readonly IGuildMemberConverter converter;
+        private readonly ISplitOrchestrator splitOrchestrator;
 
         public EventOrchestrator(
             DiscordSocketClient client,
@@ -31,8 +35,10 @@ namespace RaidRobot.Logic
             IMessageBuilder messageBuilder,
             IRegistrantLoader registrantLoader,
             IRaidSplitConfiguration config,
-            ISplitDataStore splitDataStore, 
-            IGuildMemberConverter converter)
+            ISplitDataStore splitDataStore,
+            ISplitAuditor auditor,
+            IGuildMemberConverter converter,
+            ISplitOrchestrator splitOrchestrator)
         {
             this.client = client;
             this.communicator = communicator;
@@ -41,7 +47,9 @@ namespace RaidRobot.Logic
             this.registrantLoader = registrantLoader;
             this.config = config;
             this.splitDataStore = splitDataStore;
+            this.auditor = auditor;
             this.converter = converter;
+            this.splitOrchestrator = splitOrchestrator;
         }
 
         public async Task RemoveRegistrant(RaidEvent raidEvent, CharacterType characterType, ulong userID)
@@ -59,19 +67,40 @@ namespace RaidRobot.Logic
             await UpdateAteendeeMessage(raidEvent);
         }
 
+        public async Task RemoveCharacter(ulong guildID, string eventName, string characterName)
+        {
+            var raidEvent = await findActiveEvent(guildID, eventName);
+            if (raidEvent == null)
+                return;
+
+            var split = raidEvent.Splits.Values
+                .FirstOrDefault(x => x.Attendees.Any(y => string.Equals(y.Value.CharacterName, characterName, StringComparison.OrdinalIgnoreCase)));
+            if (split == null)
+            {
+                await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel, $"{characterName} is not in a split.");
+                return;
+            }
+
+            splitOrchestrator.RemoveFromSplit(split, characterName);
+            splitDataStore.SaveChanges();
+
+            await UpdateSplitAnnouncement(raidEvent, split);
+        }
+
         public async Task RemoveUser(RaidEvent raidEvent, ulong userID, CharacterType characterType)
         {
             var result = raidSplitter.RemoveFromSplit(raidEvent.Splits, userID, characterType);
 
             if (!result.HasError)
-                await updateSplitAnnouncement(raidEvent, result.Split);
+                await UpdateSplitAnnouncement(raidEvent, result.Split);
             else
                 await communicator.SendTell(userID, result.Message);
         }
 
         public async Task AddRegistrant(RaidEvent raidEvent, CharacterType characterType, GuildMember member, ulong userID)
         {
-            var content = $"Thank you for registering to attend {raidEvent.EventName} on {member.CharacterName} as a {characterType}.";
+            var mention = MentionUtils.MentionUser(member.UserId.Value);
+            var content = $"{mention} Thank you for registering to attend {raidEvent.EventName} on {member.CharacterName} as a {characterType.Name}.";
             await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SpamChannel, content);
 
             if (!raidEvent.Splits.Any())
@@ -81,13 +110,14 @@ namespace RaidRobot.Logic
             var addResult = raidSplitter.AddToSplit(raidEvent, raidEvent.Splits, attendee);
 
             if (!addResult.HasError)
-                await updateSplitAnnouncement(raidEvent, addResult.Split);
+                await UpdateSplitAnnouncement(raidEvent, addResult.Split);
             else
                 await communicator.SendTell(userID, addResult.Message);
 
-            var mention = MentionUtils.MentionUser(userID);
-            await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SpamChannel, $"{mention} {addResult.Message}");
-
+            if (raidEvent.FinalizedDT.HasValue)
+            {
+                await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SpamChannel, $"{mention} {addResult.Message}");
+            }
         }
 
         public async Task IsNowLate(RaidEvent raidEvent, ulong userID)
@@ -106,7 +136,7 @@ namespace RaidRobot.Logic
                 var result = raidSplitter.RemoveFromSplit(raidEvent.Splits, lateCharacter);
                 if (!result.HasError)
                 {
-                    await updateSplitAnnouncement(raidEvent, result.Split);
+                    await UpdateSplitAnnouncement(raidEvent, result.Split);
                     result.Split.Actions.Add((DateTime.Now, $"Removed {result.Attendee.CharacterName}."));
 
                 }
@@ -129,7 +159,7 @@ namespace RaidRobot.Logic
                 var addResult = raidSplitter.AddToSplit(raidEvent, raidEvent.Splits, lateCharacter);
                 addResult.Split.Actions.Add((DateTime.Now, $"No Loger Late - Added {addResult.Attendee.CharacterName}"));
                 raidEvent.LateMembers.Remove(lateCharacter.CharacterName);
-                await updateSplitAnnouncement(raidEvent, addResult.Split);
+                await UpdateSplitAnnouncement(raidEvent, addResult.Split);
             }
             splitDataStore.SaveChanges();
 
@@ -173,47 +203,343 @@ namespace RaidRobot.Logic
             }
         }
 
-        private async Task updateSplitAnnouncement(RaidEvent raidEvent, Split split)
+        public async Task UpdateSplitAnnouncement(RaidEvent raidEvent, Split split)
         {
             MessageDetail message = null;
-            if (raidEvent.Messages.ContainsKey(MessageContexts.Announcement))
+            var content = messageBuilder.BuildSplitAnnouncement(raidEvent, split);
+
+            if (split.Messages.ContainsKey(MessageContexts.Announcement))
             {
-                message = raidEvent.Messages[MessageContexts.Announcement];
+                message = split.Messages[MessageContexts.Announcement];
+                await communicator.UpdateMessage(raidEvent.GuildID, message.ChannelID, message.MessageID, content);
+
             }
 
-            if (raidEvent.Messages.ContainsKey(MessageContexts.FinalAnnouncement))
+            if (split.Messages.ContainsKey(MessageContexts.FinalAnnouncement))
             {
-                message = raidEvent.Messages[MessageContexts.FinalAnnouncement];
-            }
-
-            if (message != null)
-            {
-                var content = messageBuilder.BuildSplitAnnouncement(raidEvent, split);
+                message = split.Messages[MessageContexts.FinalAnnouncement];
                 await communicator.UpdateMessage(raidEvent.GuildID, message.ChannelID, message.MessageID, content);
             }
+        }
+
+        public async Task PrepareSplits(ulong guildID, string eventName, int numberOfSplits)
+        {
+            var raidEvent = await findActiveEvent(guildID, eventName);
+            if (raidEvent == null)
+                return;
+
+            await PrepareSplits(raidEvent, numberOfSplits);
+        }
+
+        public async Task PrepareSplits(RaidEvent raidEvent, int numberOfSplits, Dictionary<string, SplitAttendee> members = null, bool ignoreBuddies = false)
+        {
+            if (raidEvent.FinalizedDT.HasValue)
+            {
+                await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.AdminChannel,
+                    "The raid is finalized, use the help commands to re-open the event if you want to make changes.");
+                return;
+            }
+
+            if (members == null && raidEvent.IsASubSplit)
+            {
+                var sourceEvent = splitDataStore.Events.Values.FirstOrDefault(x => x.ExpirationDT >= DateTime.Now &&
+                    string.Equals(x.EventName, raidEvent.SourceEventName, StringComparison.OrdinalIgnoreCase));
+                if (sourceEvent == null)
+                {
+                    await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.AdminChannel,
+                        $"Can't find Source Event {raidEvent.SourceEventName} to recreate splits.");
+                    return;
+                }
+
+                members = sourceEvent.Splits[raidEvent.SourceEventSplitNumber].Attendees.Values.Select(x => x.Clone())
+                    .ToDictionary(x => x.CharacterName, x => x);
+            }
+
+            var newExp = DateTime.Now.AddHours(Constants.DEFAULT_EXTENSION_HOURS);
+            if (newExp >= raidEvent.ExpirationDT)
+                raidEvent.ExpirationDT = newExp;
+
+            foreach (var split in raidEvent.Splits)
+            {
+                await cleanUpSplit(raidEvent, split.Value);
+                if (raidEvent.Messages.ContainsKey(MessageContexts.LatePreview))
+                {
+                    try
+                    {
+                        var guild = client.GetGuild(raidEvent.GuildID);
+                        var channel = guild.GetTextChannel(raidEvent.Messages[MessageContexts.LatePreview].ChannelID);
+                        await channel.DeleteMessageAsync(raidEvent.Messages[MessageContexts.LatePreview].MessageID);
+                    }
+                    catch
+                    {
+
+                    }
+
+                    raidEvent.Messages.Remove(MessageContexts.LatePreview);
+                }
+            }
+
+            raidEvent.Splits = await raidSplitter.Split(raidEvent, numberOfSplits, members, ignoreBuddies);
+
+            foreach (var split in raidEvent.Splits.Values)
+            {
+                var content = messageBuilder.BuildSplitAnnouncement(raidEvent, split);
+                var message = await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.AdminChannel, content);
+                split.Messages[MessageContexts.Announcement] = message.ConvertToMessageDetail();
+
+                var responsibilitiesContent = messageBuilder.BuildResponsiblityAnnouncement(split);
+                var responsibilitiesMessage = await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.AdminChannel, responsibilitiesContent);
+                split.Messages[MessageContexts.ResponsibilityMessage] = responsibilitiesMessage.ConvertToMessageDetail();
+                
+                await auditor.GenerateAuditFile(raidEvent, split);
+
+            }
+
+            var lateMessageContent = messageBuilder.BuildLateMessage(raidEvent);
+            var lateMessage = await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.AdminChannel, lateMessageContent);
+            raidEvent.Messages[MessageContexts.LatePreview] = lateMessage.ConvertToMessageDetail();
+
+            splitDataStore.SaveChanges();
+        }
+
+        public async Task FinalizeSplits(ulong guildID, string eventName)
+        {
+            var raidEvent = await findActiveEvent(guildID, eventName);
+            if (raidEvent == null)
+                return;
+
+            if (raidEvent.FinalizedDT.HasValue)
+            {
+                await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel,
+                    "The event is already finalized.");
+                return;
+            }
+
+
+            if (!raidEvent.Splits.Any())
+            {
+                await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel,
+                    $"You must preview the splits before creating them.  Type {config.Settings.MessagePrefix} PreviewSplit EventName NumberOfSplits");
+                return;
+            }
+
+            raidEvent.ExpirationDT = DateTime.Now.AddHours(Constants.DEFAULT_EVENT_HOURS);
+            raidEvent.FinalizedDT = DateTime.Now;
+
+            foreach (var split in raidEvent.Splits.Values)
+            {
+                var content = messageBuilder.BuildSplitAnnouncement(raidEvent, split);
+                var message = await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SplitChannel, content);
+                split.Messages[MessageContexts.FinalAnnouncement] = message.ConvertToMessageDetail();
+            }
+
+            var lateContent = messageBuilder.BuildLateMessage(raidEvent);
+            var lateMessage = await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SplitChannel, lateContent);
+            raidEvent.Messages[MessageContexts.LateAnnouncement] = lateMessage.ConvertToMessageDetail();
+
+            splitDataStore.SaveChanges();
+        }
+
+        public async Task MoveTo(ulong guildID, string eventName, string characterName, int splitNumber)
+        {
+            var activeEvent = await findActiveEvent(guildID, eventName);
+            if (activeEvent == null)
+                return;
+
+            var result = splitOrchestrator.MoveTo(activeEvent, activeEvent.Splits, characterName, splitNumber);
+            splitDataStore.SaveChanges();
+
+            var message = $"```asciidoc{Environment.NewLine}{result}{Environment.NewLine}```";
+            await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel, message);
+            foreach (var split in activeEvent.Splits.Values)
+            {
+                await UpdateSplitAnnouncement(activeEvent, split);
+            }
+        }
+
+        public async Task Swap(ulong guildID, string eventName, string characterName1, string characterName2)
+        {
+            var raidEvent = await findActiveEvent(guildID, eventName);
+            if (raidEvent == null)
+                return;
+
+            var result = splitOrchestrator.Swap(raidEvent, raidEvent.Splits, characterName1, characterName2);
+            splitDataStore.SaveChanges();
+
+            var message = $"```yaml{Environment.NewLine}{result}{Environment.NewLine}```";
+            await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.AdminChannel, message);
+
+            foreach (var split in raidEvent.Splits.Values)
+            {
+                await UpdateSplitAnnouncement(raidEvent, split);
+            }
+        }
+
+        public async Task OpenEvent(ulong guildID, string eventName)
+        {
+            var raidEvent = await findActiveEvent(guildID, eventName);
+            if (raidEvent == null)
+                return;
+
+            if (!raidEvent.FinalizedDT.HasValue)
+            {
+                await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.AdminChannel, $"The event hasn't been finalized.");
+                return;
+            }
+
+            raidEvent.FinalizedDT = null;
+
+            var guild = client.GetGuild(raidEvent.GuildID);
+            foreach (var split in raidEvent.Splits.Values)
+            {
+                if (split.Messages.ContainsKey(MessageContexts.FinalAnnouncement))
+                {
+                    try
+                    {
+                        var channel = guild.GetTextChannel(split.Messages[MessageContexts.FinalAnnouncement].ChannelID);
+                        await channel.DeleteMessageAsync(split.Messages[MessageContexts.FinalAnnouncement].MessageID);
+                    }
+                    catch { }
+                    split.Messages.Remove(MessageContexts.FinalAnnouncement);
+                }
+            }
+
+            if (raidEvent.Messages.ContainsKey(MessageContexts.LateAnnouncement))
+            {
+                try
+                {
+                    var channel = guild.GetTextChannel(raidEvent.Messages[MessageContexts.LateAnnouncement].ChannelID);
+                    await channel.DeleteMessageAsync(raidEvent.Messages[MessageContexts.LateAnnouncement].MessageID);
+                }
+                catch { }
+                raidEvent.Messages.Remove(MessageContexts.LateAnnouncement);
+            }
+
+            splitDataStore.SaveChanges();
+        }
+
+        public async Task NeedsItem(ulong guildID, string eventName, string itemName, string characterNames)
+        {
+            var raidEvent = await findActiveEvent(guildID, eventName);
+            if (raidEvent == null)
+                return;
+
+            var characters = characterNames.Split(" ");
+            foreach (var character in characters)
+            {
+                if (raidEvent.ItemNeeds.Any(x => x.CharacterName.ToLower() == character.ToLower() && x.Item.ToLower() == itemName.ToLower()))
+                    continue;
+
+                raidEvent.ItemNeeds.Add(new ItemNeed()
+                {
+                    CharacterName = character,
+                    Item = itemName,
+                });
+            }
+
+            splitDataStore.SaveChanges();
+
+            StringBuilder sb = new StringBuilder();
+            var itemGroups = raidEvent.ItemNeeds.GroupBy(x => x.Item);
+            sb.AppendLine("```yaml");
+            sb.AppendLine("Item Needs Updated");
+            foreach (var item in itemGroups)
+            {
+                sb.AppendLine($"**{item.Key}**");
+                var charactersOrdered = item.Select(x => x.CharacterName).OrderBy(x => x).ToList();
+                var charactersJoined = string.Join(", ", charactersOrdered);
+                sb.AppendLine(charactersJoined);
+            }
+            sb.AppendLine("```");
+
+            await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel, sb.ToString());
+        }
+
+        public async Task CancelEvent(ulong guildID, string eventName)
+        {
+            var raidEvent = await findActiveEvent(guildID, eventName);
+            if (raidEvent == null)
+                return;
+
+            await cleanUpEvent(raidEvent);
+
+            splitDataStore.Events.TryRemove(raidEvent.EventID, out var removed);
+            splitDataStore.SaveChanges();
+
+            await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel,
+                $"```yaml{Environment.NewLine}Event, {eventName} has been removed.{Environment.NewLine}```");
         }
 
         private async Task updateLateAnnouncement(RaidEvent raidEvent)
         {
             MessageDetail lateMessage = null;
+            var lateContent = messageBuilder.BuildLateMessage(raidEvent);
             if (raidEvent.Messages.ContainsKey(MessageContexts.LatePreview))
             {
                 lateMessage = raidEvent.Messages[MessageContexts.LatePreview];
+                await communicator.UpdateMessage(raidEvent.GuildID, lateMessage.ChannelID, lateMessage.MessageID, lateContent);
             }
 
             if (raidEvent.Messages.ContainsKey(MessageContexts.LateAnnouncement))
             {
                 lateMessage = raidEvent.Messages[MessageContexts.LateAnnouncement];
-            }
-
-            if (lateMessage != null)
-            {
-                var lateContent = messageBuilder.BuildLateMessage(raidEvent);
                 await communicator.UpdateMessage(raidEvent.GuildID, lateMessage.ChannelID, lateMessage.MessageID, lateContent);
-
             }
         }
 
+        private async Task<RaidEvent> findActiveEvent(ulong guildID, string eventName)
+        {
+            var raidEvent = splitDataStore.Events.Values
+                .FirstOrDefault(x => x.ExpirationDT >= DateTime.Now && string.Equals(x.EventName, eventName, StringComparison.OrdinalIgnoreCase));
+
+            if (raidEvent == null)
+            {
+                await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel, $"No Active Event named: {eventName}.");
+            }
+
+            return raidEvent;
+        }
+
+        private async Task cleanUpEvent(RaidEvent raidEvent)
+        {
+            try
+            {
+                var guild = client.GetGuild(raidEvent.GuildID);
+
+                foreach (var message in raidEvent.Messages.ToList())
+                {
+                    var channel = guild.GetTextChannel(message.Value.ChannelID);
+                    await channel.DeleteMessageAsync(message.Value.MessageID);
+                    raidEvent.Messages.Remove(message.Key);
+                }
+            }
+            catch
+            {
+                //Do Nothing...
+            }
+
+            foreach (var split in raidEvent.Splits.Values)
+            {
+                await cleanUpSplit(raidEvent, split);
+            }
+        }
+
+        private async Task cleanUpSplit(RaidEvent raidEvent, Split split)
+        {
+            var guild = client.GetGuild(raidEvent.GuildID);
+            foreach (var message in split.Messages)
+            {
+                try
+                {
+                    var channel = guild.GetTextChannel(message.Value.ChannelID);
+                    await channel.DeleteMessageAsync(message.Value.MessageID);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Could not delete Message {message.Key}, {ex.Message}");
+                }
+            }
+        }
 
     }
 }
