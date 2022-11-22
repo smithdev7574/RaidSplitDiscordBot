@@ -71,6 +71,7 @@ namespace RaidRobot.Infrastructure
             var sb = new StringBuilder();
 
             sb.AppendLine("__**Admin Raid Commands**__");
+            sb.AppendLine($"**{config.Settings.MessagePrefix} AddASplit** followed by the Event Name to add another split by stealing characters from the existing splits.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} CancelEvent** followed by the Event Name remove an existing event from the bot.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} CheckRegistration** followed by the event name to see who has signed up for an event and their status with the bot.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} CreateEvent** followed by the event name and Raid Type (Main, Alt, Free) to create a raid event that users can sign up to attend.");
@@ -83,6 +84,7 @@ namespace RaidRobot.Infrastructure
             sb.AppendLine($"**{config.Settings.MessagePrefix} SimulateRegistration** followed by the event name to have the bot randomly perform the split behavior **Testing Only**.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} SplitASplit** followed by the event name, the split number and how many splits you want to make to create splits from an existing split.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} Swap** followed by the event name then the two character names you want to swap between splits.");
+            sb.AppendLine($"**{config.Settings.MessagePrefix} Undo** followed by the Event Name to reverse the last major change to the raid event.");
 
             sb.AppendLine(string.Empty);
 

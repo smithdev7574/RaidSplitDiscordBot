@@ -11,6 +11,7 @@ namespace RaidRobot.Logic
         AttendeeResponse RemoveFromSplit(Dictionary<int, Split> splits, ulong userId, CharacterType characterType);
         AttendeeResponse AddToSplit(RaidEvent raidEvent, Dictionary<int, Split> splits, ulong userId, CharacterType characterType, bool ignoreBuddies = false);
         AttendeeResponse AddToSplit(RaidEvent raidEvent, Dictionary<int, Split> splits, SplitAttendee attendee, bool ignoreBuddies = false);
+        Split AddASplit(RaidEvent raidEvent);
         Task<Dictionary<int, Split>> Split(RaidEvent raidEvent, int numberOfSplits, Dictionary<string, SplitAttendee> members = null, bool ignoreBuddies = false);
     }
 }

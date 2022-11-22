@@ -64,6 +64,48 @@ namespace RaidRobot.Infrastructure
             }
         }
 
+        [Command("AddASplit", RunMode = RunMode.Async)]
+        public async Task AddASplit(string eventName)
+        {
+            try
+            {
+                var permissionResult = permissionChecker.CheckManagerPermissions(Context, "AddASplit");
+                if (!permissionResult.HasPremission)
+                {
+                    await ReplyAsync(permissionResult.Message);
+                    return;
+                }
+
+                await eventOrchestrator.AddASplit(Context.Guild.Id, eventName);
+            }
+            catch (Exception ex)
+            {
+                await ReplyAsync($"Error: {ex.Message}");
+            }
+
+        }
+
+        [Command("Undo", RunMode = RunMode.Async)]
+        public async Task Undo(string eventName)
+        {
+            try
+            {
+                var permissionResult = permissionChecker.CheckManagerPermissions(Context, "Undo");
+                if (!permissionResult.HasPremission)
+                {
+                    await ReplyAsync(permissionResult.Message);
+                    return;
+                }
+
+                await eventOrchestrator.Undo(Context.Guild.Id, eventName);
+            }
+            catch (Exception ex)
+            {
+                await ReplyAsync($"Error: {ex.Message}");
+            }
+
+        }
+
         [Command("MoveTo", RunMode = RunMode.Async)]
         public async Task MoveTo(string eventName, string characterName, string splitNumber)
         {

@@ -380,6 +380,87 @@ namespace RaidRobot.Logic
             splitDataStore.SaveChanges();
         }
 
+        public async Task AddASplit(ulong guildID, string eventName)
+        {
+            var raidEvent = await findActiveEvent(guildID, eventName);
+            if (raidEvent == null)
+                return;
+
+            if (!raidEvent.Splits.Any())
+            {
+                await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel,
+                    $"You must preview the splits before Adding One them.  Type {config.Settings.MessagePrefix} PreviewSplit EventName NumberOfSplits");
+                return;
+            }
+
+            raidEvent.SplitHistory.Add(DateTime.Now, raidEvent.Splits.Clone());
+
+            var newSplit = raidSplitter.AddASplit(raidEvent);
+            var previewContent = messageBuilder.BuildSplitAnnouncement(raidEvent, newSplit);
+            var previewMessage = await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.AdminChannel, previewContent);
+            newSplit.Messages[MessageContexts.Announcement] = previewMessage.ConvertToMessageDetail();
+
+            var responsibilitiesContent = messageBuilder.BuildResponsiblityAnnouncement(newSplit);
+            var responsibilitiesMessage = await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.AdminChannel, responsibilitiesContent);
+            newSplit.Messages[MessageContexts.ResponsibilityMessage] = responsibilitiesMessage.ConvertToMessageDetail();
+
+
+            if (raidEvent.FinalizedDT.HasValue)
+            {
+                var content = messageBuilder.BuildSplitAnnouncement(raidEvent, newSplit);
+                var message = await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SplitChannel, content);
+                newSplit.Messages[MessageContexts.FinalAnnouncement] = message.ConvertToMessageDetail();
+            }
+
+            foreach(var split in raidEvent.Splits.Values)
+            {
+                await UpdateSplitAnnouncement(raidEvent, split);
+            }
+
+            splitDataStore.SaveChanges();
+        }
+
+        public async Task Undo(ulong guildID, string eventName)
+        {
+            var raidEvent = await findActiveEvent(guildID, eventName);
+            if (raidEvent == null)
+                return;
+
+            if (!raidEvent.Splits.Any())
+            {
+                await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel,
+                    $"You must preview the splits before Udoing anything.  Type {config.Settings.MessagePrefix} PreviewSplit EventName NumberOfSplits");
+                return;
+            }
+
+            if(!raidEvent.SplitHistory.Any())
+            {
+                await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel,
+                    $"No split history to undo.");
+                return;
+            }
+
+            var lastChangeDT = raidEvent.SplitHistory.Max(x => x.Key);
+            raidEvent.SplitHistory.Remove(lastChangeDT, out var splits);
+
+            var removedSplits = raidEvent.Splits.Where(x => !splits.Keys.Contains(x.Key)).Select(x => x.Value);
+            foreach(var removedSplit in removedSplits)
+            {
+                await cleanUpSplit(raidEvent, removedSplit);
+            }
+
+            raidEvent.Splits = splits;
+            foreach(var split in raidEvent.Splits.Values)
+            {
+                try
+                {
+                    await UpdateSplitAnnouncement(raidEvent, split);
+                }
+                catch { }
+            }
+            splitDataStore.SaveChanges();
+        }
+
         public async Task MoveTo(ulong guildID, string eventName, string characterName, int splitNumber)
         {
             var activeEvent = await findActiveEvent(guildID, eventName);
