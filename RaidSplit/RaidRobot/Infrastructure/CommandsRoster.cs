@@ -1,4 +1,5 @@
 ﻿using Discord.Commands;
+using Discord.WebSocket;
 using RaidRobot.Data;
 using RaidRobot.Data.Entities;
 using System;
@@ -289,6 +290,31 @@ namespace RaidRobot.Infrastructure
                 await ReplyAsync($"Error: {ex.Message}");
             }
         }
+
+        [Command("MapUser", RunMode = RunMode.Async)]
+        public async Task MapUser(string characterName, string characterTypeName, SocketUser user)
+        {
+            try
+            {
+                var permissionResult = permissionChecker.CheckManagerPermissions(Context, "MapCharacter");
+                if (!permissionResult.HasPremission)
+                {
+                    await ReplyAsync(permissionResult.Message);
+                    return;
+                }
+
+                if (user == null)
+                    return;
+
+                await rosterOrchestrator.MapUser(Context.Guild.Id, user.Id, characterName, characterTypeName);
+            }
+            catch (Exception ex)
+            {
+                await ReplyAsync($"Error: {ex.Message}");
+            }
+        }
+
+
 
         [Command("Unmap", RunMode = RunMode.Async)]
         public async Task Unmap(string characterName)

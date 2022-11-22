@@ -203,6 +203,39 @@ namespace RaidRobot.Logic
             }
         }
 
+        public async Task<string> SplitASplit(ulong guildID, ulong userID, string username, string eventName, int splitNumber, int numberOfSplits)
+        {
+            var raidEvent = await findActiveEvent(guildID, eventName);
+            if (raidEvent == null)
+                return $"Couldn't Find Active Raid Named {eventName}";
+
+            if (!raidEvent.Splits.ContainsKey(splitNumber))
+                return $"{eventName} doesn't have a Split {splitNumber}.";
+
+            var split = raidEvent.Splits[splitNumber];
+
+            raidEvent.SubSplitCount++;
+            var members = split.Attendees.Values.Select(x => x.Clone())
+                .ToDictionary(x => x.CharacterName, x => x);
+
+            string newEventName = $"SubSplit_{raidEvent.SubSplitCount}_{raidEvent.EventName}";
+            var newEvent = createEvent(newEventName, DateTime.Now.AddHours(1),
+                raidEvent.RaidType, userID,
+                guildID,
+                username);
+
+            newEvent.IsASubSplit = true;
+            newEvent.SourceEventName = raidEvent.EventName;
+            newEvent.SourceEventSplitNumber = split.SplitNumber;
+
+            splitDataStore.Events.TryAdd(newEvent.EventID, newEvent);
+            splitDataStore.SaveChanges();
+            await PrepareSplits(newEvent, numberOfSplits, members);
+
+            return $"Created Sub Split from {eventName}.";
+        }
+
+
         public async Task UpdateSplitAnnouncement(RaidEvent raidEvent, Split split)
         {
             MessageDetail message = null;
@@ -547,6 +580,22 @@ namespace RaidRobot.Logic
                 }
             }
         }
+
+        private RaidEvent createEvent(string eventName, DateTime eventTime, RaidType raidType, ulong userID, ulong guildID, string userName)
+        {
+            var newEvent = new RaidEvent()
+            {
+                ExpirationDT = eventTime.AddHours(6),
+                EventName = eventName,
+                UserID = userID,
+                GuildID = guildID,
+                EventDT = eventTime,
+                UserName = userName,
+                RaidType = raidType,
+            };
+            return newEvent;
+        }
+
 
     }
 }
