@@ -187,6 +187,7 @@ namespace RaidRobot.Logic
             return (alternate, string.Empty);
         }
 
+
         public string MoveTo(RaidEvent raidEvent, Dictionary<int, Split> splits, string characterName, int splitNumber, bool skipBoxes = false)
         {
             StringBuilder sb = new StringBuilder();

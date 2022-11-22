@@ -212,5 +212,43 @@ namespace RaidRobot.Infrastructure
             }
         }
 
+        [Command("SplitASplit", RunMode = RunMode.Async)]
+        public async Task SplitASplit(string eventName, string splitNumberStr, string numberOfSplitsStr)
+        {
+
+            try
+            {
+                var permissionResult = permissionChecker.CheckManagerPermissions(Context, "SplitASplit");
+                if (!permissionResult.HasPremission)
+                {
+                    await ReplyAsync(permissionResult.Message);
+                    return;
+                }
+
+                if (!int.TryParse(splitNumberStr, out var splitNumber))
+                {
+                    await ReplyAsync($"Second Param Split Number must be number you entered {splitNumberStr}");
+                    return;
+                }
+
+                if (!int.TryParse(numberOfSplitsStr, out var numberOfSplits))
+                {
+                    await ReplyAsync($"Third Param Number Of Splits must be number you entered {numberOfSplitsStr}");
+                    return;
+                }
+
+
+                var user = Context.User as IGuildUser;
+                if (user == null) return;
+
+                var result = await eventOrchestrator.SplitASplit(Context.Guild.Id, Context.User.Id, user?.Nickname ?? user?.Username, eventName, splitNumber, numberOfSplits);
+                await ReplyAsync(result);
+            }
+            catch (Exception ex)
+            {
+                await ReplyAsync($"Error: {ex.Message}");
+            }
+        }
+
     }
 }
