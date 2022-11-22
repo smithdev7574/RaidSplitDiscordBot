@@ -136,7 +136,7 @@ namespace RaidRobot.Infrastructure
             sb.AppendLine($"**{config.Settings.MessagePrefix} RemoveInviters**  followed by the character names (spaces between) to remove their ability to be a raid inviter.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} RemoveLeaders**  followed by the character names (spaces between) to remove their ability to be a raid leader.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} RemoveLooters**  followed by the character names (spaces between) to remove their ability to be a master looter.");
-            sb.AppendLine($"**{config.Settings.MessagePrefix} MapCharacter**  followed by the character name, the character type then the discord user name to manually map a user to a character.");
+            sb.AppendLine($"**{config.Settings.MessagePrefix} MapUser**  followed by the character name, the character type then mention the discord user to manually map a character to a user.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} AddAnchors** followed by the character names (spaces between) to set their anchor status.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} SetBuddies** followed by the character names (spaces between) to add as a buddy group.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} AddInviters** followed by the character names (spaces between) to grant them ability to be a raid inviter.");
