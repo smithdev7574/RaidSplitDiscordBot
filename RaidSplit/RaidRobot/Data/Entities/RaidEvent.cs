@@ -31,6 +31,8 @@ namespace RaidRobot.Data.Entities
         public int SourceEventSplitNumber { get; set; }
         public bool IsASubSplit { get; set; }
 
+        public Dictionary<DateTime, Dictionary<int, Split>> SplitHistory { get; set; } = new Dictionary<DateTime, Dictionary<int, Split>>();
+
 
         public override string ToString()
         {

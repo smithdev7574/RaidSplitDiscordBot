@@ -25,5 +25,7 @@ namespace RaidRobot.Logic
         Task CancelEvent(ulong guildID, string eventName);
         Task RemoveCharacter(ulong guildID, string eventName, string characterName);
         Task<string> SplitASplit(ulong guildID, ulong userID, string username, string eventName, int splitNumber, int numberOfSplits);
+        Task AddASplit(ulong guildID, string eventName);
+        Task Undo(ulong guildID, string eventName);
     }
 }

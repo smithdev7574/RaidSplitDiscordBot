@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using RaidRobot.Models;
 using Discord.WebSocket;
 using RaidRobot.Infrastructure;
+using Discord;
 
 namespace RaidRobot.Logic
 {
@@ -166,6 +167,148 @@ namespace RaidRobot.Logic
             return splits;
         }
 
+        public Split AddASplit(RaidEvent raidEvent)
+        {
+            var newSplitCount = raidEvent.Splits.Count() + 1;
+            var newSplit = new Split()
+            {
+                SplitNumber = newSplitCount
+            };
+
+            //Remove Boxers
+            var boxers = raidEvent.Splits.Values.SelectMany(x => x.Attendees.Values).Where(x => x.IsBoxing).ToList();
+            splitInto(newSplit, raidEvent.Splits, boxers, 0m, newSplitCount);
+
+            //Remove Anchors
+            var anchors = raidEvent.Splits.Values.SelectMany(x => x.Attendees.Values).Where(x => x.IsAnchor).ToList();
+            var anchorWeight = newSplit.Attendees.Values.Where(x => x.IsAnchor).Sum(x => x.Weight);
+            splitInto(newSplit, raidEvent.Splits, anchors, anchorWeight, newSplitCount);
+
+            splitIntoForClasses(raidEvent, newSplit, newSplitCount);
+
+            var leader = newSplit.Attendees.Values.FirstOrDefault(x => x.CanBeLeader);
+            var looter = newSplit.Attendees.Values.FirstOrDefault(x => x.CanBeMasterLooter);
+            var inviter = newSplit.Attendees.Values.FirstOrDefault(x => x.CanBeInviter);
+
+            if (leader == null)
+                leader = newSplit.Attendees.Values.FirstOrDefault();
+
+            newSplit.Leader = leader;
+            newSplit.MasterLooter = looter ?? leader;
+            newSplit.Inviter = inviter ?? leader;
+
+            raidEvent.Splits.TryAdd(newSplit.SplitNumber, newSplit);
+
+            return newSplit;
+        }
+
+        private void splitInto(Split newSplit, Dictionary<int, Split> otherSplits, List<SplitAttendee> attendees, decimal currentWeight, int newSplitCount)
+        {
+            var avgWeight = (attendees.Sum(x => x.Weight) + currentWeight) / newSplitCount;
+
+            foreach (var oldSplit in otherSplits.Values)
+            {
+                var oldSplitWeight = attendees.Where(x => x.SplitNumber == oldSplit.SplitNumber).Sum(x => x.Weight);
+                var weightToRemove = Math.Floor(oldSplitWeight - avgWeight);
+                var weightRemoved = 0m;
+                var availableAttendeesToRemove = attendees
+                    .Where(x => x.SplitNumber == oldSplit.SplitNumber
+                        && !string.Equals(x.CharacterName, oldSplit.Leader.CharacterName, StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(x.CharacterName, oldSplit.MasterLooter.CharacterName, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(x => x.RandomOrder).ToList();
+                var removedAttendeeCount = 0;
+
+                foreach (var attendee in availableAttendeesToRemove.ToList()) //Yes I want a new list here...
+                {
+                    if (removedAttendeeCount + 1 >= availableAttendeesToRemove.Count)
+                        break; //Lets not take the last one...
+
+                    if (weightRemoved >= weightToRemove)
+                        break; //We took enough lets stop...
+
+                    swapAttendee(oldSplit, newSplit, attendee);
+                    weightRemoved += attendee.Weight;
+                    removedAttendeeCount++;
+
+                    var boxes = oldSplit.Attendees.Values.Where(x => x.UserID == attendee.UserID && !string.Equals(x.CharacterName, attendee.CharacterName, StringComparison.OrdinalIgnoreCase));
+                    foreach (var box in boxes)
+                    {
+                        swapAttendee(oldSplit, newSplit, box);
+                        //Not counting box weight towards removal...
+                    }
+                }
+            }
+        }
+
+        private void splitIntoForClasses(RaidEvent raidEvent, Split newSplit, int newSplitCount)
+        {
+            foreach (var gameClass in config.Classes)
+            {
+                var newSplitWeight = newSplit.Attendees.Values.Where(x => string.Equals(x.ClassName, gameClass.Name, StringComparison.OrdinalIgnoreCase))
+                    .Sum(x => x.Weight);
+
+                var totalWeight = raidEvent.Splits.Values.SelectMany(x => x.Attendees.Values)
+                    .Where(x => string.Equals(x.ClassName, gameClass.Name, StringComparison.OrdinalIgnoreCase))
+                    .Sum(x => x.Weight) + newSplitWeight;
+
+                var avgWeight = totalWeight / newSplitCount;
+
+                foreach (var oldSplit in raidEvent.Splits.Values)
+                {
+                    var oldSplitWeight = oldSplit.Attendees.Values.Where(x => string.Equals(x.ClassName, gameClass.Name, StringComparison.OrdinalIgnoreCase)).Sum(x => x.Weight);
+                    var weightToRemove = Math.Floor(oldSplitWeight - avgWeight);
+
+                    if (weightToRemove <= 0)
+                        continue;
+
+                    var availableAttendeesToRemove = oldSplit.Attendees.Values
+                        .Where(x => 
+                            string.Equals(x.ClassName, gameClass.Name, StringComparison.OrdinalIgnoreCase)
+                            && !x.IsBox
+                            && !x.IsBoxing //We already did boxers
+                            && !string.Equals(x.CharacterName, oldSplit.Leader.CharacterName, StringComparison.OrdinalIgnoreCase)
+                            && !string.Equals(x.CharacterName, oldSplit.MasterLooter.CharacterName, StringComparison.OrdinalIgnoreCase)).ToList();
+                    var weightRemoved = 0m;
+                    var removedAttendeeCount = 0;
+
+                    foreach (var attendee in availableAttendeesToRemove.ToList()) //Yes I want a new list here...
+                    {
+                        if (removedAttendeeCount + 1 >= availableAttendeesToRemove.Count)
+                            break; //Lets not take the last one...
+
+                        if (weightRemoved >= weightToRemove)
+                            break; //We took enough lets stop...
+
+                        swapAttendee(oldSplit, newSplit, attendee);
+                        weightRemoved += attendee.Weight;
+                        removedAttendeeCount++;
+
+                        var boxes = oldSplit.Attendees.Values.Where(x => x.UserID == attendee.UserID && !string.Equals(x.CharacterName, attendee.CharacterName, StringComparison.OrdinalIgnoreCase));
+                        foreach (var box in boxes)
+                        {
+                            swapAttendee(oldSplit, newSplit, box);
+                            //Not counting box weight towards removal...
+                        }
+                    }
+                }
+            }
+        }
+
+        private void swapAttendee(Split oldSplit, Split newSplit, SplitAttendee attendee)
+        {
+            if (!oldSplit.Attendees.ContainsKey(attendee.CharacterName))
+                return;
+
+            attendee.SplitNumber = null;
+            oldSplit.Attendees.Remove(attendee.CharacterName);
+            oldSplit.Actions.Add((DateTime.Now, $"Removed {attendee.CharacterName}."));
+
+            attendee.SplitNumber = newSplit.SplitNumber;
+            newSplit.Attendees.TryAdd(attendee.CharacterName, attendee);
+            newSplit.Actions.Add((DateTime.Now, $"Added {attendee.CharacterName}."));
+        }
+
+
         private void performSplit(RaidEvent raidEvent, Dictionary<int, Split> splits, Dictionary<string, SplitAttendee> registrants, int numberOfSplits, bool ignoreBuddies)
         {
             randomizeMembers(registrants);
@@ -195,7 +338,6 @@ namespace RaidRobot.Logic
             var randomOrderedPreSplits = splitDataStore.PreSplits.Values.OrderBy(x => x.RandomNumber);
             return randomOrderedPreSplits.ToList();
         }
-
 
         private void initializeSplits(Dictionary<int, Split> splits, IEnumerable<SplitAttendee> splitMembers, int numberOfSplits)
         {
