@@ -97,7 +97,7 @@ namespace RaidRobot.Logic
             if (!string.IsNullOrEmpty(message))
             {
                 message = $"```yaml{Environment.NewLine}{message}{Environment.NewLine}```";
-                await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.AdminChannel, message);
+                await communicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SpamChannel, message);
             }
 
             foreach (var s in raidEvent.Splits.Values)
