@@ -112,13 +112,6 @@ namespace RaidRobot.Logic
 
         public  async Task UpdateClass(ulong guildID, string characterName, string className)
         {
-            if (className.Split().Length != 1)
-            {
-                await textCommunicator.SendMessageByChannelName(guildID, config.Settings.SpamChannel,
-                    $"Class Names can only be a single word. Reply to the original message with just the class name.  Bad Input: {className}");
-                return;
-            }
-
             var gameClass = config.Classes.FirstOrDefault(x => string.Equals(x.Name, className, StringComparison.OrdinalIgnoreCase));
             if (gameClass == null)
             {
