@@ -49,6 +49,7 @@ namespace RaidRobot.Messaging
             client.ReactionRemoved += (message, channel, reaction) => { return reactionRemoved(message, channel, reaction); };
         }
 
+
         private async Task reactionRemoved(Cacheable<IUserMessage, ulong> message, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
         {
             try
@@ -165,15 +166,23 @@ namespace RaidRobot.Messaging
 
                     if (message != null)
                     {
-                        await message.RemoveReactionAsync(reaction.Emote, userID);
+                        try
+                        {
+                            await message.RemoveReactionAsync(reaction.Emote, userID);
+                        }
+                        catch (Exception ex) 
+                        {
+                            Console.WriteLine($"Unable to remove reaction from registration message: {ex.Message}");
+                            await textCommunicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SpamChannel, $"Unable to remove reaction from registration message: {ex.Message}");
+                        }
                         var mention = MentionUtils.MentionUser(userID);
                         var characters = splitDataStore.Roster.Values.Where(x => x.UserId == userID);
                         string charactersMessage = "none";
                         if (characters.Any())
                             charactersMessage = string.Join(", ", characters.Select(x => $"{x.CharacterName} - {x.CharacterType}"));
-                        var errorMessage = $"Removing {mention} from {raidEvent.EventName} because there is something wrong with their {characterType.Name} character.{Environment.NewLine}" +
-                            $"Characters mapped to UserID {userID}: {charactersMessage}";
-                        await textCommunicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SpamChannel, errorMessage);
+                        var errorMessage = $"Removing you from {raidEvent.EventName} because there is something wrong with your {characterType.Name} character. Most likely I don't know your character name or your class. Type !rr Help in the bot spam channel to learn how to set your class.{Environment.NewLine}" +
+                            $"Characters mapped to you: {charactersMessage}";
+                        await textCommunicator.SendTell(reaction.UserId, errorMessage);
                     }
                 }
                 await eventOrchestrator.UpdateAteendeeMessage(raidEvent);
