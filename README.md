@@ -10,7 +10,7 @@ I took a moment to upgrade the Bot to use DotNet 8 and I also updated to the lat
 1. Create Your Event
    - Create your event by typing !rr CreateEvent followed by a name, the raid type, and the date and time of the event.
    - The Event Name must be unique compared to the other active events.
-   - Events become inactive 
+   - Events become inactive 6 hours after the Splits are Finalized.
 2. Wait for People to Sign up
    - People will use the emoji icons to register and the bot should update the registration message with counts.
    - If the bot seems to be ignoring responses you may need to try and create a new event. The bot writes down the registration message ID for each event and uses that message ID to know which event people are signing up for. If for some reason the message was posted, but the bot couldn't write down the ID it will be unable to recover.
