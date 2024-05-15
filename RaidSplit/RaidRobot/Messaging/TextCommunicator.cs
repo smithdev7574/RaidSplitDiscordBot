@@ -30,7 +30,7 @@ namespace RaidRobot.Messaging
             return returnMessage;
         }
 
-        public async Task<RestUserMessage> SendMessageByChannelName(ulong guildID, string channelName, string message)
+        public async Task<RestUserMessage> SendMessageByChannelName(ulong guildID, string channelName, string message, ComponentBuilder componentBuilder = null)
         {
             var guild = client.GetGuild(guildID);
             var channel = guild.TextChannels.FirstOrDefault(x => x.Name == channelName);
@@ -38,7 +38,20 @@ namespace RaidRobot.Messaging
             if (channel == null)
                 throw new Exception($"Could not locate channel {channelName} in guild {guildID}");
 
-            var returnMessage = await channel.SendMessageAsync(message);
+
+            RestUserMessage returnMessage = null;
+            if (componentBuilder != null)
+                try
+                {
+                    returnMessage = await channel.SendMessageAsync(message, components: componentBuilder.Build());
+                }
+                catch(Exception ex)
+                {
+                    returnMessage = await channel.SendMessageAsync(message);
+                }
+            else
+                returnMessage = await channel.SendMessageAsync(message);
+
             return returnMessage;
         }
 

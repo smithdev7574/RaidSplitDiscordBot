@@ -1,4 +1,5 @@
-﻿using Discord.WebSocket;
+﻿using Discord;
+using Discord.WebSocket;
 using RaidRobot.Data;
 using RaidRobot.Data.Entities;
 using RaidRobot.Logic;
@@ -33,14 +34,16 @@ namespace RaidRobot.Messaging
         public void Initialize()
         {
             client.MessageReceived += (message) => { return messageRecieved(message); };
+            client.ButtonExecuted += (arg) => { return buttonPressed(arg); };
+
         }
 
         private async Task messageRecieved(SocketMessage message)
         {
             try
             {
-                //We don't care about messages that aren't a reply.
-                if (message.Reference == null || !message.Reference.MessageId.IsSpecified)
+                //We don't care about messages that aren't a reply, or messages that come from the bot.
+                if (message.Reference == null || !message.Reference.MessageId.IsSpecified || message.Author.IsBot)
                     return;
 
                 if (splitDataStore.UnknownMessages.ContainsKey(message.Reference.MessageId.Value))
@@ -108,8 +111,20 @@ namespace RaidRobot.Messaging
         }
 
 
+        private async Task buttonPressed(SocketMessageComponent arg)
+        {
+            if (splitDataStore.UnknownMessages.ContainsKey(arg.Message.Id))
+            {
+                var unknownMessage = splitDataStore.UnknownMessages[arg.Message.Id];
+                if (unknownMessage.MessageType != UnknownMessageTypes.Class)
+                    return;
 
+                var className = arg.Data.CustomId; //For Unknown Class Messages I put the class name in the ID field for each button
+                await rosterOrchestrator.UpdateClass(unknownMessage, className);
 
-
+                string message = "Thanks for letting me know.";
+                await arg.RespondAsync(message);
+            }
+        }
     }
 }

@@ -209,11 +209,12 @@ namespace RaidRobot.Logic
 
             if (string.IsNullOrEmpty(member.ClassName))
             {
-                var classMessage = $"{mention} I don't know {member.CharacterName}'s class. Please reply to this message with {member.CharacterName}'s class." +
+                var classMessage = $"{mention} I don't know {member.CharacterName}'s class. Please reply to this message with {member.CharacterName}'s class, or press one of the class buttons below." +
                 $"Please do this before raid time or the split will ignore you. You should only have to do this once. " +
                 $"{Environment.NewLine}**Acceptable Values:** {Environment.NewLine}" +
                 $"```yaml{Environment.NewLine}{string.Join(", ", config.Classes.Select(x => x.Name).OrderBy(x => x))}{Environment.NewLine}```";
-                var messageResult = await textCommunicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SpamChannel, classMessage);
+
+                var messageResult = await textCommunicator.SendMessageByChannelName(raidEvent.GuildID, config.Settings.SpamChannel, classMessage, getClassComponentBuilder());
 
                 var unknownMessage = new UnknownMessage()
                 {
@@ -233,6 +234,24 @@ namespace RaidRobot.Logic
             }
 
             return member;
+        }
+
+        private ComponentBuilder getClassComponentBuilder()
+        {
+            var componentBuilder = new ComponentBuilder();
+
+            foreach (var gameClass in config.Classes.Where(x => !string.IsNullOrWhiteSpace(x.EmojiCode)))
+            {
+                var emote = Emote.Parse(gameClass.EmojiCode);
+                componentBuilder.WithButton(gameClass.Name, gameClass.Name, style: ButtonStyle.Secondary, emote: emote);
+            }
+
+            foreach (var gameClass in config.Classes.Where(x => string.IsNullOrWhiteSpace(x.EmojiCode)))
+            {
+                componentBuilder.WithButton(gameClass.Name, gameClass.Name, style: ButtonStyle.Secondary);
+            }
+
+            return componentBuilder;
         }
 
         public string UpdateLeaders(string characterNames, bool value)
