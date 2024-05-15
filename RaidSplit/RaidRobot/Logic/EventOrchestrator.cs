@@ -157,7 +157,7 @@ namespace RaidRobot.Logic
             foreach (var lateCharacter in lateCharacters)
             {
                 var addResult = raidSplitter.AddToSplit(raidEvent, raidEvent.Splits, lateCharacter);
-                addResult.Split.Actions.Add((DateTime.Now, $"No Loger Late - Added {addResult.Attendee.CharacterName}"));
+                addResult.Split.Actions.Add((DateTime.Now, $"No Longer Late - Added {addResult.Attendee.CharacterName}"));
                 raidEvent.LateMembers.Remove(lateCharacter.CharacterName);
                 await UpdateSplitAnnouncement(raidEvent, addResult.Split);
             }
@@ -359,7 +359,7 @@ namespace RaidRobot.Logic
             if (!raidEvent.Splits.Any())
             {
                 await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel,
-                    $"You must preview the splits before creating them.  Type {config.Settings.MessagePrefix} PreviewSplit EventName NumberOfSplits");
+                    $"You must preview the splits before creating them.  Type {config.Settings.MessagePrefix} PreviewEvent EventName NumberOfSplits");
                 return;
             }
 
@@ -389,7 +389,7 @@ namespace RaidRobot.Logic
             if (!raidEvent.Splits.Any())
             {
                 await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel,
-                    $"You must preview the splits before Adding One them.  Type {config.Settings.MessagePrefix} PreviewSplit EventName NumberOfSplits");
+                    $"You must preview the splits before Adding One them.  Type {config.Settings.MessagePrefix} PreviewEvent EventName NumberOfSplits");
                 return;
             }
 
@@ -429,7 +429,7 @@ namespace RaidRobot.Logic
             if (!raidEvent.Splits.Any())
             {
                 await communicator.SendMessageByChannelName(guildID, config.Settings.AdminChannel,
-                    $"You must preview the splits before Udoing anything.  Type {config.Settings.MessagePrefix} PreviewSplit EventName NumberOfSplits");
+                    $"You must preview the splits before Udoing anything.  Type {config.Settings.MessagePrefix} PreviewEvent EventName NumberOfSplits");
                 return;
             }
 
