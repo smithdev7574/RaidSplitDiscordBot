@@ -31,6 +31,7 @@ namespace RaidRobot.Infrastructure
             }
             catch(Exception ex)
             {
+                logger.DebugLog($"Error Creating Event {ex.Message}");
                 await ReplyAsync($"Error: {ex.Message}");
             }
         }
@@ -59,6 +60,7 @@ namespace RaidRobot.Infrastructure
             }
             catch (Exception ex)
             {
+                logger.DebugLog($"Error Previewing Event {ex.Message}");
                 await ReplyAsync($"Error: {ex.Message}");
 
             }
@@ -80,6 +82,7 @@ namespace RaidRobot.Infrastructure
             }
             catch (Exception ex)
             {
+                logger.DebugLog($"Error Adding Split {ex.Message}");
                 await ReplyAsync($"Error: {ex.Message}");
             }
 
@@ -101,6 +104,7 @@ namespace RaidRobot.Infrastructure
             }
             catch (Exception ex)
             {
+                logger.DebugLog($"Error Undoing Event {ex.Message}");
                 await ReplyAsync($"Error: {ex.Message}");
             }
 
@@ -290,6 +294,13 @@ namespace RaidRobot.Infrastructure
             {
                 await ReplyAsync($"Error: {ex.Message}");
             }
+        }
+
+        [Command("DebugEvent", RunMode = RunMode.Async)]
+        public async Task DebugEvent(string eventName)
+        {
+            var result = await eventOrchestrator.DebugEvent(eventName);
+            await ReplyAsync(result);
         }
 
     }

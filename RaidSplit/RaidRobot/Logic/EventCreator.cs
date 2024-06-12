@@ -20,19 +20,22 @@ namespace RaidRobot.Logic
         private readonly ITextCommunicator textCommunicator;
         private readonly IRegistrantLoader registrantLoader;
         private readonly IMessageBuilder messageBuilder;
+        private readonly ILogger logger;
 
         public EventCreator(
             IRaidSplitConfiguration config,
             ISplitDataStore splitDataStore,
             ITextCommunicator textCommunicator, 
             IRegistrantLoader registrantLoader,
-            IMessageBuilder messageBuilder)
+            IMessageBuilder messageBuilder,
+            ILogger logger)
         {
             this.config = config;
             this.splitDataStore = splitDataStore;
             this.textCommunicator = textCommunicator;
             this.registrantLoader = registrantLoader;
             this.messageBuilder = messageBuilder;
+            this.logger = logger;
         }
 
         public async Task CreateEvent(SocketCommandContext context, IGuildUser user, string eventName, DateTime raidTime, string raidTypeName)

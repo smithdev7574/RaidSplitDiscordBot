@@ -264,6 +264,28 @@ namespace RaidRobot.Logic
             await PrepareSplits(raidEvent, numberOfSplits);
         }
 
+        public async Task<string> DebugEvent(string eventName)
+        {
+            StringBuilder sb = new StringBuilder();
+            var events = splitDataStore.Events.Values.Where(x => string.Equals(x.EventName, eventName, StringComparison.OrdinalIgnoreCase)).
+                OrderByDescending(x => x.EventDT).ToList();
+
+            sb.AppendLine($"There are {events.Count} events in the data set with the name {eventName}");
+            foreach(var e in events)
+            {
+                sb.AppendLine($"Event Date: {e.EventDT}");
+                sb.AppendLine($"Expires On: {e.ExpirationDT}");
+                sb.AppendLine($"Server Time: {DateTime.Now}");
+                foreach(var message in e.Messages)
+                {
+                    sb.AppendLine($"{message.Key} - {message.Value.MessageID}");
+                }
+                sb.AppendLine();
+            }
+
+            return sb.ToString();
+        }
+
         public async Task PrepareSplits(RaidEvent raidEvent, int numberOfSplits, Dictionary<string, SplitAttendee> members = null, bool ignoreBuddies = false)
         {
             if (raidEvent.FinalizedDT.HasValue)

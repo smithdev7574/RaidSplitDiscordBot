@@ -16,5 +16,6 @@ namespace RaidRobot.Infrastructure
         public string SplitChannel { get; set; }
         public string DataFileDirectoryPath { get; set; }
         public string TempFileDirectoryPath { get; set; }
+        public bool ShouldShowDebugLog { get; set; }
     }
 }

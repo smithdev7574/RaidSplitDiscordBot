@@ -20,6 +20,7 @@ namespace RaidRobot.Infrastructure
         private readonly IEventOrchestrator eventOrchestrator;
         private readonly IRosterOrchestrator rosterOrchestrator;
         private readonly IPreSplitOrchestrator preSplitOrchestrator;
+        private readonly ILogger logger;
 
         public Commands(
             IRaidSplitConfiguration config,
@@ -28,7 +29,8 @@ namespace RaidRobot.Infrastructure
             IUploadMonitor uploadMonitor,
             IEventOrchestrator eventOrchestrator,
             IRosterOrchestrator rosterOrchestrator,
-            IPreSplitOrchestrator preSplitOrchestrator)
+            IPreSplitOrchestrator preSplitOrchestrator,
+            ILogger logger)
         {
             this.config = config;
             this.permissionChecker = permissionChecker;
@@ -37,6 +39,7 @@ namespace RaidRobot.Infrastructure
             this.eventOrchestrator = eventOrchestrator;
             this.rosterOrchestrator = rosterOrchestrator;
             this.preSplitOrchestrator = preSplitOrchestrator;
+            this.logger = logger;
         }
 
         [Command("Help", RunMode = RunMode.Async)]
@@ -85,6 +88,7 @@ namespace RaidRobot.Infrastructure
             sb.AppendLine($"**{config.Settings.MessagePrefix} SplitASplit** followed by the event name, the split number and how many splits you want to make to create splits from an existing split.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} Swap** followed by the event name then the two character names you want to swap between splits.");
             sb.AppendLine($"**{config.Settings.MessagePrefix} Undo** followed by the Event Name to reverse the last major change to the raid event.");
+            sb.AppendLine($"**{config.Settings.MessagePrefix} DebugEvent** followed by an event name to get debug information about the event.");
 
             sb.AppendLine(string.Empty);
 

@@ -19,6 +19,7 @@ namespace RaidRobot
     class Program
     {
         private Configuration config;
+        private Logger logger;
         private DiscordSocketClient client;
         private CommandService commands;
         private IServiceProvider services;
@@ -32,6 +33,7 @@ namespace RaidRobot
                 GatewayIntents = GatewayIntents.All
             });
             commands = new CommandService();
+            logger = new Logger(config);
 
             configureServices();
 
@@ -57,6 +59,7 @@ namespace RaidRobot
                 .AddSingleton<IRaidSplitConfiguration>(config) //Wrapper around appsettings.json to access the config data
                 .AddSingleton(client) //The Discord.Net client that is maintaining the connection and interaction to discord
                 .AddSingleton(commands) //A reference to the commands we wireup to accept command input from discord
+                .AddSingleton<ILogger>(logger) //A Cheap logger to help troubleshoot some issues.
                 .AddScoped<IEventCreator, EventCreator>() // Creates Events and Sets up the Initial Announcements
                 .AddScoped<IEventOrchestrator, EventOrchestrator>() //Handles Interactions for a given Raid Event
                 .AddScoped<IGuildMemberConverter, GuildMemberConverter>() //Helper to convert a Guild Member into an Attendee (probably could have been an extension method)
@@ -99,20 +102,28 @@ namespace RaidRobot
             int argPos = 0;
             if (message.HasStringPrefix($"{config.Settings.MessagePrefix.ToUpper()} ", ref argPos) || message.HasStringPrefix($"{config.Settings.MessagePrefix.ToLower()} ", ref argPos))
             {
+                logger.DebugLog($"Received message with bot configuration: {message.Content}");
                 try
                 {
+                    logger.DebugLog("Attempting to execute message command.");
                     var result = await commands.ExecuteAsync(context, argPos, services);
                     if (!result.IsSuccess)
                     {
+                        logger.DebugLog($"Message was not successful: {result.Error}");
                         StringBuilder sb = new StringBuilder();
                         sb.AppendLine("I am sorry, I don't understand your request.");
                         sb.AppendLine($"Remember, you can always type {config.Settings.MessagePrefix} help for a list of commands.");
                         sb.AppendLine($"Here is the error message and reason incase it helps. {result.Error} {result.ErrorReason}");
                         await context.User.SendMessageAsync(sb.ToString());
                     }
+                    else
+                    {
+                        logger.DebugLog($"Message Command was succesful");
+                    }
                 }
                 catch (Exception ex)
                 {
+                    logger.DebugLog($"Error Occured Processing message {ex.Message}");
                     try
                     {
                         await context.Channel.SendMessageAsync($"Something bad happened. {ex.Message}");
